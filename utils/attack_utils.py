@@ -17,7 +17,7 @@ def fgm(model_prediction, x, y, eps=0.01, iters=1, sign=True, clip_min=0., clip_
     :return: A tensor, contains adversarial samples for each input.
     """
     xadv = tf.identity(x)
-    loss_fn = tf.nn.softmax_cross_entropy_with_logits
+    loss_fn = tf.nn.softmax_cross_entropy_with_logits_v2
 
     if sign:
         noise_fn = tf.sign

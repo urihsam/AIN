@@ -21,11 +21,11 @@ def set_flags():
     flags.DEFINE_float("BETA_Y", 50, "Coefficient for loss of Y") # 50
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
     flags.DEFINE_float("PIXEL_THRESHOLD", 16, "Threshold for pixel distance") # 16
-    flags.DEFINE_float("EPSILON", 16, "Epsilon for fgm attack") # 16
+    flags.DEFINE_float("EPSILON", 64, "Epsilon for fgm attack") # 64
     flags.DEFINE_integer("FGM_ITERS", 1, "Iteration for fgm attack") # 1
     #flags.DEFINE_float("CONV_LEAKY_RATIO", 0.4, "Ratio of the leaky relu in conv layers") # 0.4
     #flags.DEFINE_float("FC_LEAKY_RATIO", 0.1, "Ratio of the leaky relu in fc layers") # 0.1
-    flags.DEFINE_bool("PARTIAL_LOSS", True, "Use partial loss or not")
+    flags.DEFINE_bool("PARTIAL_LOSS", False, "Use partial loss or not")
     flags.DEFINE_float("PARTIAL_THRESHOLD", 0.2, "The threshold for partial loss switch")
     flags.DEFINE_float('REG_SCALE', 0.01, 'The scale of regularization')
     flags.DEFINE_string("OPT_TYPE", "ADAM", "The type of optimization") # ADAM, MOME, NEST
