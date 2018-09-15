@@ -256,9 +256,11 @@ class DeepCAE:
         return generated
 
     def tf_load(self, sess, path, name='deep_cae.ckpt', spec=""):
-        saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
+        #saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
+        saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='autoencoder'))
         saver.restore(sess, path+'/'+name+spec)
 
     def tf_save(self, sess, path, name='deep_cae.ckpt', spec=""):
-        saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
+        #saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
+        saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='autoencoder'))
         saver.save(sess, path+'/'+name+spec)

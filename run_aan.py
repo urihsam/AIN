@@ -25,7 +25,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x
     model_loss_y, model_ly_dist = model.loss_y
     model_loss = model.loss(model_loss_x, model_loss_y)
-    fetches = [model._target_accuracy, model._target_adv_accuracy, model_loss, model_loss_x,
+    fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, model_loss, model_loss_x,
                model_lx_dist, model_max_dist, model_loss_y, model_ly_dist, graph_dict["merged_summary"]]
     if total_batch is None:
         if valid:
@@ -34,7 +34,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             total_batch = int(data.test_size/FLAGS.BATCH_SIZE)
     else: total_batch = total_batch
 
-    acc = 0; adv_acc = 0; loss = 0; l_x = 0; Lx_dist = 0; max_dist = 0; l_y = 0; Ly_dist = 0
+    acc = 0; adv_acc = 0; fake_acc = 0; loss = 0; l_x = 0; Lx_dist = 0; max_dist = 0; l_y = 0; Ly_dist = 0
     for idx in range(total_batch):
         if valid:
             batch_xs, batch_ys = data.next_valid_batch(FLAGS.BATCH_SIZE)
@@ -48,11 +48,12 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             graph_dict["is_training"]: False
         }
         
-        batch_acc, batch_adv_acc, batch_loss, batch_l_x, batch_Lx_dist, batch_max_dist, batch_l_y, batch_Ly_dist, summary = \
+        batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_l_x, batch_Lx_dist, batch_max_dist, batch_l_y, batch_Ly_dist, summary = \
             sess.run(fetches=fetches, feed_dict=feed_dict)
         test_writer.add_summary(summary, idx)
         acc += batch_acc
         adv_acc += batch_adv_acc
+        fake_acc += batch_fake_acc
         loss += batch_loss
         l_x += batch_l_x
         Lx_dist += batch_Lx_dist
@@ -61,6 +62,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
         Ly_dist += batch_Ly_dist
     acc /= total_batch
     adv_acc /= total_batch
+    fake_acc /= total_batch
     loss /= total_batch
     l_x /= total_batch
     Lx_dist /= total_batch
@@ -70,6 +72,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
 
     #adv_images = X+adv_noises
     print('Original accuracy: {0:0.5f}'.format(acc))
+    print('Faked accuracy: {0:0.5f}'.format(fake_acc))
     print('Attacked accuracy: {0:0.5f}'.format(adv_acc))
     print("Loss = {:.4f} Loss_x = {:.4f} Loss_y = {:.4f} Lx distance = {:.4f}  Max pixel distance = {:.4f}".format(
               loss, l_x, l_y, Lx_dist, max_dist))

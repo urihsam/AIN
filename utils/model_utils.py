@@ -16,12 +16,11 @@ def set_flags():
     flags.DEFINE_integer("NUM_CHANNELS", 3, "Input depth dimension")
     flags.DEFINE_integer("NUM_EPOCHS", 1, "Number of epochs") # 200
     flags.DEFINE_integer("BATCH_SIZE", 128, "Size of training batches")# 128
-    flags.DEFINE_float("ALPHA", 5, "Coefficient for rerank function")# 5
-    flags.DEFINE_float("BETA_X", 0.01, "Coefficient for loss of X") # 0.01
+    flags.DEFINE_float("BETA_X", 0.1, "Coefficient for loss of X") # 0.1
     flags.DEFINE_float("BETA_Y", 50, "Coefficient for loss of Y") # 50
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
     flags.DEFINE_float("PIXEL_THRESHOLD", 16, "Threshold for pixel distance") # 16
-    flags.DEFINE_float("EPSILON", 64, "Epsilon for fgm attack") # 64
+    flags.DEFINE_float("EPSILON", 128, "Epsilon for fgm attack") # 128
     flags.DEFINE_integer("FGM_ITERS", 1, "Iteration for fgm attack") # 1
     #flags.DEFINE_float("CONV_LEAKY_RATIO", 0.4, "Ratio of the leaky relu in conv layers") # 0.4
     #flags.DEFINE_float("FC_LEAKY_RATIO", 0.1, "Ratio of the leaky relu in fc layers") # 0.1
