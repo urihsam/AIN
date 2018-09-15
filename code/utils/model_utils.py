@@ -2,7 +2,8 @@ from dependency import *
 import os
 
 def set_flags():
-    flags.DEFINE_boolean("train", False, "Train and save the ATN model.")
+    flags.DEFINE_bool("train", False, "Train and save the ATN model.")
+    flags.DEFINE_bool("local", False, "Run this model locally or on the cloud")
     flags.DEFINE_string("RESNET18_PATH", "./models/target_classifier/resnet18", "Path of Resnet18")
     flags.DEFINE_string("AE_PATH", "./models/AE", "Path of AAN")
     flags.DEFINE_string("CNN_PATH", "./models/target_classifier/basic_CNN", "Path of CNN")
@@ -19,7 +20,7 @@ def set_flags():
     flags.DEFINE_float("BETA_X", 0.1, "Coefficient for loss of X") # 0.1
     flags.DEFINE_float("BETA_Y", 50, "Coefficient for loss of Y") # 50
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
-    flags.DEFINE_float("PIXEL_THRESHOLD", 16, "Threshold for pixel distance") # 16
+    flags.DEFINE_float("PIXEL_THRESHOLD", 8, "Threshold for pixel distance") # 8
     flags.DEFINE_float("EPSILON", 128, "Epsilon for fgm attack") # 128
     flags.DEFINE_integer("FGM_ITERS", 1, "Iteration for fgm attack") # 1
     flags.DEFINE_bool("PARTIAL_LOSS", False, "Use partial loss or not")

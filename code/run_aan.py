@@ -179,11 +179,13 @@ def train():
         train_writer = model_utils.init_writer(FLAGS.TRAIN_LOG_PATH, g)
         valid_writer = model_utils.init_writer(FLAGS.VALID_LOG_PATH, g)
         
-        total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
+        if FLAGS.local:
+            total_train_batch = 2
+        else:
+            total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
-            #for train_idx in range(total_train_batch):
-            for train_idx in range(2):
+            for train_idx in range(total_train_batch):
                 batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
                 feed_dict = {
                     images_holder: batch_xs,
