@@ -4,7 +4,7 @@ import os
 def set_flags():
     flags.DEFINE_boolean("train", False, "Train and save the ATN model.")
     flags.DEFINE_string("RESNET18_PATH", "./models/target_classifier/resnet18", "Path of Resnet18")
-    flags.DEFINE_string("AE_PATH", "./models/AE_for_ATN", "Path of ATN")
+    flags.DEFINE_string("AE_PATH", "./models/AE", "Path of AAN")
     flags.DEFINE_string("CNN_PATH", "./models/target_classifier/basic_CNN", "Path of CNN")
     flags.DEFINE_string("TRAIN_LOG_PATH", "./graphs/train", "Path of log for training")
     flags.DEFINE_string("VALID_LOG_PATH", "./graphs/valid", "Path of log for validation")
@@ -22,8 +22,6 @@ def set_flags():
     flags.DEFINE_float("PIXEL_THRESHOLD", 16, "Threshold for pixel distance") # 16
     flags.DEFINE_float("EPSILON", 128, "Epsilon for fgm attack") # 128
     flags.DEFINE_integer("FGM_ITERS", 1, "Iteration for fgm attack") # 1
-    #flags.DEFINE_float("CONV_LEAKY_RATIO", 0.4, "Ratio of the leaky relu in conv layers") # 0.4
-    #flags.DEFINE_float("FC_LEAKY_RATIO", 0.1, "Ratio of the leaky relu in fc layers") # 0.1
     flags.DEFINE_bool("PARTIAL_LOSS", False, "Use partial loss or not")
     flags.DEFINE_float("PARTIAL_THRESHOLD", 0.2, "The threshold for partial loss switch")
     flags.DEFINE_float('REG_SCALE', 0.01, 'The scale of regularization')
