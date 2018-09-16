@@ -173,6 +173,8 @@ def train():
         graph_dict = {}
         graph_dict["images_holder"] = images_holder
         graph_dict["label_holder"] = label_holder
+        graph_dict["low_bound_holder"] = low_bound_holder
+        graph_dict["up_bound_holder"] = up_bound_holder
         graph_dict["partial_loss_holder"] = partial_loss_holder
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
