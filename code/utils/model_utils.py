@@ -20,7 +20,8 @@ def set_flags():
     flags.DEFINE_float("BETA_X", 0.1, "Coefficient for loss of X") # 0.1
     flags.DEFINE_float("BETA_Y", 50, "Coefficient for loss of Y") # 50
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
-    flags.DEFINE_float("PIXEL_THRESHOLD", 8, "Threshold for pixel distance") # 8
+    flags.DEFINE_float("PIXEL_BOUND", 16, "Bound for pixel distance") # 16
+    flags.DEFINE_float("BOUND_DECAY_RATE", 0.75, "Bound decay rate") # 0.5
     flags.DEFINE_float("EPSILON", 128, "Epsilon for fgm attack") # 128
     flags.DEFINE_integer("FGM_ITERS", 1, "Iteration for fgm attack") # 1
     flags.DEFINE_bool("PARTIAL_LOSS", False, "Use partial loss or not")

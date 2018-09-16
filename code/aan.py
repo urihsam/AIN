@@ -10,18 +10,25 @@ class AAN:
     Adversarial Attack Network
     """
 
-    def __init__(self, data, label, partial_loss, is_training):
+    def __init__(self, data, label, low_bound, up_bound, partial_loss, is_training):
+        self.data = data
+        self.label = label
+        self.output_low_bound = low_bound
+        self.output_up_bound = up_bound
+        self.partial_loss = partial_loss
+        self.is_training = is_training
+
         with tf.variable_scope('autoencoder'):
             #self._autoencoder = bae.BasicAE()
-            self._autoencoder = dcae.DeepCAE(layer_low_bound=-FLAGS.PIXEL_THRESHOLD, 
-                                             layer_up_bound=FLAGS.PIXEL_THRESHOLD
+            self._autoencoder = dcae.DeepCAE(output_low_bound=self.output_low_bound, 
+                                             output_up_bound=self.output_up_bound
                                             )
-            self._autoencoder_prediction = data + self._autoencoder.prediction(data, is_training)
+            self._autoencoder_prediction = self.data + self._autoencoder.prediction(self.data, self.is_training)
         with tf.variable_scope('target') as scope:
             self._target_adv = resnet.resnet18()
             #self._target_adv = resnet.resnet18()
             self._target_adv_logits, self._target_adv_prediction = self._target_adv.prediction(self._autoencoder_prediction)
-            self._target_adv_accuracy = self._target_adv.accuracy(self._target_adv_prediction, label)
+            self._target_adv_accuracy = self._target_adv.accuracy(self._target_adv_prediction, self.label)
 
         with tf.variable_scope(scope, reuse=True):
             self._target_attack = resnet.resnet18()
@@ -38,10 +45,6 @@ class AAN:
             self._target_logits, self._target_prediction = self._target.prediction(data)
             self._target_accuracy = self._target.accuracy(self._target_prediction, label)
             
- 
-        self.data = data
-        self.label = label
-        self.partial_loss = partial_loss
         self.loss_x
         self.loss_y
         self.prediction
@@ -55,6 +58,7 @@ class AAN:
 
     def vectorize(self, x):
         return tf.reshape(x, [-1, FLAGS.IMAGE_ROWS * FLAGS.IMAGE_COLS * FLAGS.NUM_CHANNELS])
+        
 
     @lazy_property
     def loss_x(self):
@@ -138,7 +142,7 @@ class AAN:
         learning rate decay with decay_rate per decay_steps
         """
         # use lobal step to keep track of our iterations
-        global_step = tf.Variable(0, name="GLOBAL_STEP", trainable=False)
+        global_step = tf.Variable(0, name="OPT_GLOBAL_STEP", trainable=False)
         # decay
         learning_rate = tf.train.exponential_decay(FLAGS.LEARNING_RATE, global_step, 
             FLAGS.LEARNING_DECAY_STEPS, FLAGS.LEARNING_DECAY_RATE)

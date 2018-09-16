@@ -8,6 +8,9 @@ from utils.decorator import lazy_method, lazy_method_no_scope
 class DeepCAE:
 
     def __init__(self, 
+                 # relu bounds
+                 output_low_bound, 
+                 output_up_bound,
                  # conv layers
                  conv_filter_size=[3,3], 
                  conv_channel_sizes=[128, 128, 128, 128, 1], #[256, 256, 256, 1]
@@ -26,9 +29,6 @@ class DeepCAE:
                  defc_state_sizes=[4096],
                  defc_leaky_ratio=[0.2, 0.2],
                  defc_drop_rate=[0.75, 0],
-                 # relu bounds
-                 layer_low_bound=0, 
-                 layer_up_bound=255,
                  # switch
                  use_batch_norm = False
                 ):
@@ -51,8 +51,8 @@ class DeepCAE:
         self.defc_leaky_ratio = defc_leaky_ratio
         self.defc_drop_rate = defc_drop_rate
          # relu bounds
-        self.layer_low_bound = layer_low_bound
-        self.layer_up_bound = layer_up_bound
+        self.output_low_bound = output_low_bound
+        self.output_up_bound = output_up_bound
         # switch
         self.use_batch_norm = use_batch_norm
 
@@ -152,7 +152,7 @@ class DeepCAE:
             # batch normalization
             if self.use_batch_norm:
                 net = ne.batch_norm(net, self.is_training)
-            #net = ne.leaky_brelu(net, self.conv_leaky_ratio[layer_id], self.layer_low_bound, self.layer_up_bound) # Nonlinear act
+            #net = ne.leaky_brelu(net, self.conv_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
             net = ne.leaky_relu(net, self.conv_leaky_ratio[layer_id])
             #net = ne.max_pool_2x2(net) # Pooling
 
@@ -172,7 +172,7 @@ class DeepCAE:
             # batch normalization
             if self.use_batch_norm:
                 net = ne.batch_norm(net, self.is_training, axis=1)
-            #net = ne.leaky_brelu(net, self.enfc_leaky_ratio[layer_id], self.layer_low_bound, self.layer_up_bound) # Nonlinear act
+            #net = ne.leaky_brelu(net, self.enfc_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
             net = ne.leaky_relu(net, self.enfc_leaky_ratio[layer_id])
             net = ne.drop_out(net, self.enfc_drop_rate[layer_id], self.is_training)
             #net = ne.elu(net)
@@ -194,7 +194,7 @@ class DeepCAE:
             if self.use_batch_norm:
                 net = ne.batch_norm(net, self.is_training, axis=1)
             
-            #net = ne.leaky_brelu(net, self.defc_leaky_ratio[layer_id], self.layer_low_bound, self.layer_up_bound) # Nonlinear act
+            #net = ne.leaky_brelu(net, self.defc_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
             net = ne.leaky_relu(net, self.defc_leaky_ratio[layer_id])
             net = ne.drop_out(net, self.defc_drop_rate[layer_id], self.is_training)
             #net = ne.elu(net)
@@ -218,9 +218,9 @@ class DeepCAE:
             if self.use_batch_norm:
                 net = ne.batch_norm(net, self.is_training)
             if layer_id == self.num_decv-1: # last layer
-                net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.layer_low_bound, self.layer_up_bound) # Nonlinear act
+                net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.output_low_bound, self.output_up_bound) # Nonlinear act
             else:
-                #net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.layer_low_bound, self.layer_up_bound) # Nonlinear act
+                #net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.output_low_bound, self.output_up_bound) # Nonlinear act
                 net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])
                 #net = ne.elu(net)
 
