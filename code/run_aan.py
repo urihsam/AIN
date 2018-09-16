@@ -180,7 +180,7 @@ def train():
         valid_writer = model_utils.init_writer(FLAGS.VALID_LOG_PATH, g)
         
         if FLAGS.local:
-            total_train_batch = 2
+            total_train_batch = 3
         else:
             total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
         for epoch in range(FLAGS.NUM_EPOCHS):

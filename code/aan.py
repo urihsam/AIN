@@ -138,7 +138,7 @@ class AAN:
         learning rate decay with decay_rate per decay_steps
         """
         # use lobal step to keep track of our iterations
-        global_step = tf.Variable(0, name="GLOBAL_STEP", trainable=False)
+        global_step = tf.Variable(0, name="LR_GLOBAL_STEP", trainable=False)
         # decay
         learning_rate = tf.train.exponential_decay(FLAGS.LEARNING_RATE, global_step, 
             FLAGS.LEARNING_DECAY_STEPS, FLAGS.LEARNING_DECAY_RATE)
