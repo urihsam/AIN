@@ -215,7 +215,9 @@ def train():
                     print('loss = {:.4f} loss_x = {:.4f} loss_y = {:.4f} Lx distance = {:.4f} Max pixel distance = {:.4f}'.format(
                           loss, l_x, l_y, Lx_dist, max_dist))
                     model.tf_save(sess) # save checkpoint
-            FLAGS.PIXEL_BOUND =  FLAGS.PIXEL_BOUND * FLAGS.BOUND_DECAY_RATE
+            if FLAGS.PIXEL_BOUND > 4.0:
+                FLAGS.PIXEL_BOUND =  FLAGS.PIXEL_BOUND * FLAGS.BOUND_DECAY_RATE
+                
                 
             end_time = time.time()
             print('Eopch {} completed with time {:.2f} s'.format(epoch+1, end_time-start_time))

@@ -14,11 +14,11 @@ class DeepCAE:
                  # conv layers
                  conv_filter_size=[3,3], 
                  conv_channel_sizes=[128, 128, 128, 128, 1], #[256, 256, 256, 1]
-                 conv_leaky_ratio=[0.6, 0.5, 0.4, 0.3, 0.2],
+                 conv_leaky_ratio=[0.4, 0.4, 0.4, 0.2, 0.2],
                  # deconv layers
                  decv_filter_size=[3,3], 
                  decv_channel_sizes=[1, 128, 128, 128, 128], #[1, 256, 256, 256]
-                 decv_leaky_ratio=[0.2, 0.3, 0.4, 0.5, 0.6],
+                 decv_leaky_ratio=[0.2, 0.2, 0.4, 0.4, 0.4],
                  # encoder fc layers
                  enfc_state_sizes=[4096], 
                  enfc_leaky_ratio=[0.2, 0.2],
