@@ -10,11 +10,12 @@ class AAN:
     Adversarial Attack Network
     """
 
-    def __init__(self, data, label, low_bound, up_bound, partial_loss, is_training):
+    def __init__(self, data, label, low_bound, up_bound, attack_epsilon, partial_loss, is_training):
         self.data = data
         self.label = label
         self.output_low_bound = low_bound
         self.output_up_bound = up_bound
+        self.attack_epsilon = attack_epsilon
         self.partial_loss = partial_loss
         self.is_training = is_training
 
@@ -32,7 +33,7 @@ class AAN:
 
         with tf.variable_scope(scope, reuse=True):
             self._target_attack = resnet.resnet18()
-            self.data_fake = fgm(self._target_attack.prediction, data, label, eps=FLAGS.EPSILON, iters=FLAGS.FGM_ITERS)
+            self.data_fake = fgm(self._target_attack.prediction, data, label, eps=self.attack_epsilon, iters=FLAGS.FGM_ITERS)
 
         with tf.variable_scope(scope, reuse=True):
             self._target_fake = resnet.resnet18()

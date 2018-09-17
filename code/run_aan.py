@@ -46,6 +46,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             graph_dict["label_holder"]: batch_ys,
             graph_dict["low_bound_holder"]: -1.0*FLAGS.PIXEL_BOUND,
             graph_dict["up_bound_holder"]: 1.0*FLAGS.PIXEL_BOUND,
+            graph_dict["epsilon_holder"]: FLAGS.EPSILON,
             graph_dict["partial_loss_holder"]: FLAGS.PARTIAL_LOSS,
             graph_dict["is_training"]: False
         }
@@ -101,13 +102,14 @@ def test():
         # Placeholder nodes.
         images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
         label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
-        low_bound_holder = tf.placeholder(tf.float32)
-        up_bound_holder = tf.placeholder(tf.float32)
-        partial_loss_holder = tf.placeholder(tf.bool)
-        is_training = tf.placeholder(tf.bool)
-        use_rerank_holder = tf.placeholder(tf.bool)
+        low_bound_holder = tf.placeholder(tf.float32, ())
+        up_bound_holder = tf.placeholder(tf.float32, ())
+        epsilon_holder = tf.placeholder(tf.float32, ())
+        partial_loss_holder = tf.placeholder(tf.bool, ())
+        is_training = tf.placeholder(tf.bool, ())
 
-        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, partial_loss_holder, is_training)
+        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder,
+                        partial_loss_holder, is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -115,6 +117,7 @@ def test():
         graph_dict["label_holder"] = label_holder
         graph_dict["low_bound_holder"] = low_bound_holder
         graph_dict["up_bound_holder"] = up_bound_holder
+        graph_dict["epsilon_holder"] = epsilon_holder
         graph_dict["partial_loss_holder"] = partial_loss_holder
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
@@ -126,11 +129,21 @@ def test():
         # tensorboard writer
         test_writer = model_utils.init_writer(FLAGS.TEST_LOG_PATH, g)
         print("\nTest")
-        test_info(sess, model, test_writer, graph_dict, total_batch=2)
+        if FLAGS.local:
+            total_test_batch = 2
+        else:
+            total_test_batch = None
+        test_info(sess, model, test_writer, graph_dict, total_batch=total_test_batch)
         test_writer.close() 
         
         batch_xs, batch_ys = data.next_test_batch(FLAGS.BATCH_SIZE)
-        adv_images = sess.run(model.prediction, feed_dict={images_holder: batch_xs, is_training: False})
+        feed_dict = {
+            images_holder: batch_xs,
+            low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
+            up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
+            is_training: False
+        }
+        adv_images = sess.run(model.prediction, feed_dict=feed_dict)
         width = 10*64
         height = 2*64
         new_im = Image.new('RGB', (width, height))
@@ -158,12 +171,14 @@ def train():
         # Placeholder nodes.
         images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
         label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
-        low_bound_holder = tf.placeholder(tf.float32)
-        up_bound_holder = tf.placeholder(tf.float32)
-        partial_loss_holder = tf.placeholder(tf.bool)
-        is_training = tf.placeholder(tf.bool)
+        low_bound_holder = tf.placeholder(tf.float32, ())
+        up_bound_holder = tf.placeholder(tf.float32, ())
+        epsilon_holder = tf.placeholder(tf.float32, ())
+        partial_loss_holder = tf.placeholder(tf.bool, ())
+        is_training = tf.placeholder(tf.bool, ())
         # model
-        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, partial_loss_holder, is_training)
+        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder,
+                        partial_loss_holder, is_training)
         model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x
         model_loss_y, model_ly_dist = model.loss_y
         model_loss = model.loss(model_loss_x, model_loss_y)
@@ -175,6 +190,7 @@ def train():
         graph_dict["label_holder"] = label_holder
         graph_dict["low_bound_holder"] = low_bound_holder
         graph_dict["up_bound_holder"] = up_bound_holder
+        graph_dict["epsilon_holder"] = epsilon_holder
         graph_dict["partial_loss_holder"] = partial_loss_holder
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
@@ -189,8 +205,10 @@ def train():
         
         if FLAGS.local:
             total_train_batch = 2
+            total_valid_batch = 2
         else:
             total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
+            total_valid_batch = None
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
             for train_idx in range(total_train_batch):
@@ -200,6 +218,7 @@ def train():
                     label_holder: batch_ys,
                     low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
                     up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
+                    epsilon_holder: FLAGS.EPSILON,
                     is_training: True,
                     partial_loss_holder: FLAGS.PARTIAL_LOSS
                 }
@@ -211,19 +230,23 @@ def train():
                 # Print info
                 if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
                     print("Using Partial Loss:", FLAGS.PARTIAL_LOSS)
-                    print("Pixel bound: [", -1.0*FLAGS.PIXEL_BOUND, FLAGS.PIXEL_BOUND,"]");
+                    print("Pixel bound: [", -1.0*FLAGS.PIXEL_BOUND, FLAGS.PIXEL_BOUND,"]   Epsilon:", FLAGS.EPSILON)
                     print('loss = {:.4f} loss_x = {:.4f} loss_y = {:.4f} Lx distance = {:.4f} Max pixel distance = {:.4f}'.format(
                           loss, l_x, l_y, Lx_dist, max_dist))
                     model.tf_save(sess) # save checkpoint
-            if FLAGS.PIXEL_BOUND > 4.0:
+            # Update bound
+            if (epoch+1) % FLAGS.BOUND_DECAY_EPOCHS == 0 and FLAGS.PIXEL_BOUND > FLAGS.MIN_BOUND:
                 FLAGS.PIXEL_BOUND =  FLAGS.PIXEL_BOUND * FLAGS.BOUND_DECAY_RATE
+            # Update epsilon
+            if (epoch+1) % FLAGS.EPSILON_DECAY_EPOCHS == 0 and FLAGS.EPSILON > FLAGS.MIN_EPSILON:
+                FLAGS.EPSILON =  FLAGS.EPSILON * FLAGS.EPSILON_DECAY_RATE
                 
                 
             end_time = time.time()
             print('Eopch {} completed with time {:.2f} s'.format(epoch+1, end_time-start_time))
             # validation
             print("\nValidation")
-            valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=2, valid=True)
+            valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=total_valid_batch, valid=True)
             # Update global variable
             if valid_dict["Ly_dist"] <= FLAGS.PARTIAL_THRESHOLD:
                 FLAGS.PARTIAL_LOSS = False
