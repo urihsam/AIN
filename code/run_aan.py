@@ -230,7 +230,8 @@ def train():
                 # Print info
                 if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
                     print("Using Partial Loss:", FLAGS.PARTIAL_LOSS)
-                    print("Pixel bound: [", -1.0*FLAGS.PIXEL_BOUND, FLAGS.PIXEL_BOUND,"]   Epsilon:", FLAGS.EPSILON)
+                    print("Pixel bound: [{:.4f}, {:.4f}]   Epsilon: {:.4f}".format(
+                          -1.0*FLAGS.PIXEL_BOUND, FLAGS.PIXEL_BOUND, FLAGS.EPSILON))
                     print('loss = {:.4f} loss_x = {:.4f} loss_y = {:.4f} Lx distance = {:.4f} Max pixel distance = {:.4f}'.format(
                           loss, l_x, l_y, Lx_dist, max_dist))
                     model.tf_save(sess) # save checkpoint
