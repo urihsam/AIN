@@ -4,7 +4,7 @@ python3 ./code/run_aan.py --train --NUM_EPOCHS 200 --BATCH_SIZE 128 --EVAL_FREQU
     --BETA_X_CHANGE_RATE 1.2\
     --BETA_X_CHANGE_EPOCHS 10\
     --BETA_Y_FAKE 50\
-    --BETA_Y_CLEAN 2\
+    --BETA_Y_CLEAN 3\
     --PIXEL_BOUND 64\
     --BOUND_CHANGE_RATE 0.8\
     --BOUND_CHANGE_EPOCHS 8\

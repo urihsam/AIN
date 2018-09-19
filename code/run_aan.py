@@ -241,6 +241,9 @@ def train():
         else:
             total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
             total_valid_batch = None
+        
+        min_adv_acc = np.Inf
+        estop_count = 0
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
             for train_idx in range(total_train_batch):
@@ -277,6 +280,7 @@ def train():
                     print("Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_fake, Ly_clean))
                     print("Lx distance = {:.4f} Max pixel distance = {:.4f}".format(Lx_dist, max_dist))
                     print("Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(Ly_dist_fake, Ly_dist_clean))
+                    print()
                     model.tf_save(sess) # save checkpoint
             # Update bound
             if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
@@ -292,12 +296,23 @@ def train():
             end_time = time.time()
             print('Eopch {} completed with time {:.2f} s'.format(epoch+1, end_time-start_time))
             # validation
-            print("\nValidation")
+            print("\n**********************")
+            print("Validation")
             valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=total_valid_batch, valid=True)
             # Update global variable
             if valid_dict["Ly_dist_fake"] <= FLAGS.PARTIAL_THRESHOLD:
                 FLAGS.PARTIAL_LOSS = False
+            # early stopping
+            if valid_dict["adv_acc"] < min_adv_acc:
+                min_adv_acc = valid_dict["adv_acc"]
+                estop_count = 0
+            else:
+                estop_count += 1
+            if estop_count >= FLAGS.EARLY_STOPPING_THRESHOLD:
+                print("Early Stopped.")
+                break
                 
+            print()
             print()
         print("Optimization Finished!")
 

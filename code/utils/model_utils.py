@@ -21,6 +21,7 @@ def set_flags():
     flags.DEFINE_integer("NUM_EPOCHS", 1, "Number of epochs") # 200
     flags.DEFINE_integer("BATCH_SIZE", 128, "Size of training batches")# 128
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
+    flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
     # Loss params
     flags.DEFINE_string("LOSS_MODE", "ENTRO", "How to calculate loss") # LOGITS, PREDS, ENTRO
     ## Beta x
