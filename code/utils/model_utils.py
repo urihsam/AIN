@@ -23,8 +23,25 @@ def set_flags():
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     # Loss params
     flags.DEFINE_string("LOSS_MODE", "ENTRO", "How to calculate loss") # LOGITS, PREDS, ENTRO
+    ## Beta x
     flags.DEFINE_float("BETA_X", 0.1, "Coefficient for loss of X") # 0.1
-    flags.DEFINE_float("BETA_Y", 50, "Coefficient for loss of Y") # 50
+    flags.DEFINE_float("BETA_X_CHANGE_RATE", 1.2, "Change rate of Beta x") # 1.2
+    flags.DEFINE_float("BETA_X_CHANGE_EPOCHS", 10, "Change epochs of Beta x") # 10
+    flags.DEFINE_float("MIN_BETA_X", 0.1, "Minimum of beta x") # 0.1
+    flags.DEFINE_float("MAX_BETA_X", 0.5, "Maximum of beta x") # 0.5
+    ## Beta y fake
+    flags.DEFINE_float("BETA_Y_FAKE", 50, "Coefficient for loss of Y FAKE") # 50
+    flags.DEFINE_float("BETA_Y_FAKE_CHANGE_RATE", 1, "Change rate of Beta Y FAKE") # 1
+    flags.DEFINE_float("BETA_Y_FAKE_CHANGE_EPOCHS", 100, "Change epochs of Beta Y FAKE") # 100
+    flags.DEFINE_float("MIN_BETA_Y_FAKE", 50, "Minimum of beta Y FAKE") # 50
+    flags.DEFINE_float("MAX_BETA_Y_FAKE", 50, "Maximum of beta Y FAKE") # 50
+    ## Beta y clean
+    flags.DEFINE_float("BETA_Y_CLEAN", 1, "Coefficient for loss of Y CLEAN") # 1
+    flags.DEFINE_float("BETA_Y_CLEAN_CHANGE_RATE", 1, "Change rate of Beta Y CLEAN") # 1
+    flags.DEFINE_float("BETA_Y_CLEAN_CHANGE_EPOCHS", 100, "Change epochs of Beta Y CLEAN") # 100
+    flags.DEFINE_float("MIN_BETA_Y_CLEAN", 1, "Minimum of beta Y CLEAN") # 1
+    flags.DEFINE_float("MAX_BETA_Y_CLEAN", 1, "Maximum of beta Y CLEAN") # 1
+
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
     flags.DEFINE_bool("PARTIAL_LOSS", False, "Use partial loss or not")
     flags.DEFINE_float("PARTIAL_THRESHOLD", 0.2, "The threshold for partial loss switch")
@@ -38,14 +55,16 @@ def set_flags():
     flags.DEFINE_integer("LEARNING_DECAY_STEPS", int(2.5*1e3), "Decay steps of learning rate")
     # Non-linear func params
     flags.DEFINE_float("PIXEL_BOUND", 16, "Bound for pixel distance") # 16
-    flags.DEFINE_float("BOUND_DECAY_RATE", 0.8, "Bound decay rate") # 0.8
-    flags.DEFINE_float("BOUND_DECAY_EPOCHS", 2, "Num of epochs per bound decay") # 2
+    flags.DEFINE_float("BOUND_CHANGE_RATE", 0.8, "Bound change rate") # 0.8
+    flags.DEFINE_float("BOUND_CHANGE_EPOCHS", 2, "Num of epochs per bound change") # 2
     flags.DEFINE_float("MIN_BOUND", 4, "Minimum bound for pixel distance") # 4
+    flags.DEFINE_float("MAX_BOUND", 128, "Maximum bound for pixel distance") # 128
     # Attack params
     flags.DEFINE_float("EPSILON", 128, "Epsilon for fgm attack") # 128
-    flags.DEFINE_float("EPSILON_DECAY_RATE", 0.8, "Epsilon decay rate") # 128
-    flags.DEFINE_float("EPSILON_DECAY_EPOCHS", 2, "Num of epochs for epsilon decay") # 2
+    flags.DEFINE_float("EPSILON_CHANGE_RATE", 0.8, "Epsilon change rate") # 128
+    flags.DEFINE_float("EPSILON_CHANGE_EPOCHS", 2, "Num of epochs for epsilon change") # 2
     flags.DEFINE_float("MIN_EPSILON", 4, "Minimum epsilon for fgm attack") # 4
+    flags.DEFINE_float("MAX_EPSILON", 128, "Maximum epsilon for fgm attack") # 128
     flags.DEFINE_integer("FGM_ITERS", 1, "Iteration for fgm attack") # 1
     
 

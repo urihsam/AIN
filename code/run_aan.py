@@ -22,11 +22,13 @@ def main(arvg=None):
 
 
 def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=False):
-    model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x
-    model_loss_y, model_ly_dist = model.loss_y
+    model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x(graph_dict["beta_x_holder"])
+    model_loss_y, (model_ly_fake, model_ly_clean), (model_ly_dist_fake, model_ly_dist_clean) = model.loss_y(graph_dict["beta_y_f_holder"], graph_dict["beta_y_c_holder"])
     model_loss = model.loss(model_loss_x, model_loss_y)
     fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, model_loss, model_loss_x,
-               model_lx_dist, model_max_dist, model_loss_y, model_ly_dist, graph_dict["merged_summary"]]
+               model_lx_dist, model_max_dist, model_loss_y, model_ly_fake, model_ly_clean, 
+               model_ly_dist_fake, model_ly_dist_clean,
+               graph_dict["merged_summary"]]
     if total_batch is None:
         if valid:
             total_batch = int(data.valid_size/FLAGS.BATCH_SIZE)
@@ -34,7 +36,9 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             total_batch = int(data.test_size/FLAGS.BATCH_SIZE)
     else: total_batch = total_batch
 
-    acc = 0; adv_acc = 0; fake_acc = 0; loss = 0; l_x = 0; Lx_dist = 0; max_dist = 0; l_y = 0; Ly_dist = 0
+    acc = 0; adv_acc = 0; fake_acc = 0; loss = 0; 
+    l_x = 0; Lx_dist = 0; max_dist = 0; 
+    l_y = 0; Ly_fake = 0; Ly_dist_fake = 0; Ly_clean = 0; Ly_dist_clean = 0
     for idx in range(total_batch):
         if valid:
             batch_xs, batch_ys = data.next_valid_batch(FLAGS.BATCH_SIZE)
@@ -47,12 +51,16 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             graph_dict["low_bound_holder"]: -1.0*FLAGS.PIXEL_BOUND,
             graph_dict["up_bound_holder"]: 1.0*FLAGS.PIXEL_BOUND,
             graph_dict["epsilon_holder"]: FLAGS.EPSILON,
+            graph_dict["beta_x_holder"]: FLAGS.BETA_X,
+            graph_dict["beta_y_f_holder"]: FLAGS.BETA_Y_FAKE,
+            graph_dict["beta_y_c_holder"]: FLAGS.BETA_Y_CLEAN,
             graph_dict["partial_loss_holder"]: FLAGS.PARTIAL_LOSS,
             graph_dict["is_training"]: False
         }
         
-        batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_l_x, batch_Lx_dist, batch_max_dist, batch_l_y, batch_Ly_dist, summary = \
-            sess.run(fetches=fetches, feed_dict=feed_dict)
+        batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_l_x, batch_Lx_dist, batch_max_dist, \
+            batch_l_y, batch_Ly_fake, batch_Ly_clean, batch_Ly_dist_fake, batch_Ly_dist_clean, summary = \
+                sess.run(fetches=fetches, feed_dict=feed_dict)
         test_writer.add_summary(summary, idx)
         acc += batch_acc
         adv_acc += batch_adv_acc
@@ -62,7 +70,11 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
         Lx_dist += batch_Lx_dist
         max_dist += batch_max_dist
         l_y += batch_l_y
-        Ly_dist += batch_Ly_dist
+        Ly_fake += batch_Ly_fake
+        Ly_clean += batch_Ly_clean
+        Ly_dist_fake += batch_Ly_dist_fake
+        Ly_dist_clean += batch_Ly_dist_clean
+        
     acc /= total_batch
     adv_acc /= total_batch
     fake_acc /= total_batch
@@ -71,14 +83,19 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     Lx_dist /= total_batch
     max_dist /= total_batch
     l_y /= total_batch
-    Ly_dist /= total_batch
+    Ly_fake /= total_batch
+    Ly_clean /= total_batch
+    Ly_dist_fake /= total_batch
+    Ly_dist_clean /= total_batch
 
     #adv_images = X+adv_noises
     print('Original accuracy: {0:0.5f}'.format(acc))
     print('Faked accuracy: {0:0.5f}'.format(fake_acc))
     print('Attacked accuracy: {0:0.5f}'.format(adv_acc))
-    print("Loss = {:.4f} Loss_x = {:.4f} Loss_y = {:.4f} Lx distance = {:.4f}  Max pixel distance = {:.4f}".format(
-              loss, l_x, l_y, Lx_dist, max_dist))
+    print("loss = {:.4f}  Loss x = {:.4f}  Loss y = {:.4f}".format(loss, l_x, l_y))
+    print("Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_fake, Ly_clean))
+    print("Lx distance = {:.4f} Max pixel distance = {:.4f}".format(Lx_dist, max_dist))
+    print("Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(Ly_dist_fake, Ly_dist_clean))
     res_dict = {"acc": acc, 
                 "adv_acc": adv_acc, 
                 "loss": loss, 
@@ -86,7 +103,10 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
                 "Lx_dist": Lx_dist,
                 "max_dist": max_dist,
                 "l_y": l_y, 
-                "Ly_dist": Ly_dist
+                "Ly_fake": Ly_fake,
+                "Ly_clean": Ly_clean,
+                "Ly_dist_fake": Ly_dist_fake,
+                "Ly_dist_clean": Ly_dist_clean
                 }
     return res_dict
 
@@ -105,6 +125,9 @@ def test():
         low_bound_holder = tf.placeholder(tf.float32, ())
         up_bound_holder = tf.placeholder(tf.float32, ())
         epsilon_holder = tf.placeholder(tf.float32, ())
+        beta_x_holder = tf.placeholder(tf.float32, ())
+        beta_y_f_holder = tf.placeholder(tf.float32, ())
+        beta_y_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.bool, ())
         is_training = tf.placeholder(tf.bool, ())
 
@@ -118,6 +141,9 @@ def test():
         graph_dict["low_bound_holder"] = low_bound_holder
         graph_dict["up_bound_holder"] = up_bound_holder
         graph_dict["epsilon_holder"] = epsilon_holder
+        graph_dict["beta_x_holder"] = beta_x_holder
+        graph_dict["beta_y_f_holder"] = beta_y_f_holder
+        graph_dict["beta_y_c_holder"] = beta_y_c_holder
         graph_dict["partial_loss_holder"] = partial_loss_holder
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
@@ -174,13 +200,16 @@ def train():
         low_bound_holder = tf.placeholder(tf.float32, ())
         up_bound_holder = tf.placeholder(tf.float32, ())
         epsilon_holder = tf.placeholder(tf.float32, ())
+        beta_x_holder = tf.placeholder(tf.float32, ())
+        beta_y_f_holder = tf.placeholder(tf.float32, ())
+        beta_y_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.bool, ())
         is_training = tf.placeholder(tf.bool, ())
         # model
         model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder,
                         partial_loss_holder, is_training)
-        model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x
-        model_loss_y, model_ly_dist = model.loss_y
+        model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x(beta_x_holder)
+        model_loss_y, (model_ly_fake, model_ly_clean), (model_ly_dist_fake, model_ly_dist_clean) = model.loss_y(beta_y_f_holder, beta_y_c_holder)
         model_loss = model.loss(model_loss_x, model_loss_y)
         model_optimization = model.optimization(model_loss)
         merged_summary = tf.summary.merge_all()
@@ -191,6 +220,9 @@ def train():
         graph_dict["low_bound_holder"] = low_bound_holder
         graph_dict["up_bound_holder"] = up_bound_holder
         graph_dict["epsilon_holder"] = epsilon_holder
+        graph_dict["beta_x_holder"] = beta_x_holder
+        graph_dict["beta_y_f_holder"] = beta_y_f_holder
+        graph_dict["beta_y_c_holder"] = beta_y_c_holder
         graph_dict["partial_loss_holder"] = partial_loss_holder
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
@@ -219,28 +251,42 @@ def train():
                     low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
                     up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
                     epsilon_holder: FLAGS.EPSILON,
+                    beta_x_holder: FLAGS.BETA_X,
+                    beta_y_f_holder: FLAGS.BETA_Y_FAKE,
+                    beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
                     is_training: True,
                     partial_loss_holder: FLAGS.PARTIAL_LOSS
                 }
                 # optimization
                 fetches = [model_optimization, model_loss, model_loss_x, model_lx_dist, model_max_dist,
-                           model_loss_y, model_ly_dist, merged_summary]
-                _, loss, l_x, Lx_dist, max_dist, l_y, Ly_dist, summary = sess.run(fetches=fetches, feed_dict=feed_dict)
+                           model_loss_y, model_ly_fake, model_ly_clean, model_ly_dist_fake, model_ly_dist_clean,
+                           merged_summary, model._target_fake_prediction]
+                _, loss, l_x, Lx_dist, max_dist, l_y, Ly_fake, Ly_clean, Ly_dist_fake, Ly_dist_clean, \
+                    summary, fake_prediction = sess.run(fetches=fetches, feed_dict=feed_dict)
+                
+                #import pdb; pdb.set_trace()
                 train_writer.add_summary(summary, train_idx)
                 # Print info
                 if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
+                    print("Hyper-params info:")
                     print("Using Partial Loss:", FLAGS.PARTIAL_LOSS)
-                    print("Pixel bound: [{:.4f}, {:.4f}]   Epsilon: {:.4f}".format(
-                          -1.0*FLAGS.PIXEL_BOUND, FLAGS.PIXEL_BOUND, FLAGS.EPSILON))
-                    print('loss = {:.4f} loss_x = {:.4f} loss_y = {:.4f} Lx distance = {:.4f} Max pixel distance = {:.4f}'.format(
-                          loss, l_x, l_y, Lx_dist, max_dist))
+                    print("Pixel bound: [{:.4f}, {:.4f}]  Epsilon: {:.4f}  Beta_X: {:.4f}  Beta_Y_FAKE: {:.4f}  Beta_Y_CLEAN: {:.4f}".format(
+                          -1.0*FLAGS.PIXEL_BOUND, FLAGS.PIXEL_BOUND, FLAGS.EPSILON, FLAGS.BETA_X, FLAGS.BETA_Y_FAKE, FLAGS.BETA_Y_CLEAN))
+                    print("Result:")
+                    print("loss = {:.4f}  Loss x = {:.4f}  Loss y = {:.4f}".format(loss, l_x, l_y))
+                    print("Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_fake, Ly_clean))
+                    print("Lx distance = {:.4f} Max pixel distance = {:.4f}".format(Lx_dist, max_dist))
+                    print("Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(Ly_dist_fake, Ly_dist_clean))
                     model.tf_save(sess) # save checkpoint
             # Update bound
-            if (epoch+1) % FLAGS.BOUND_DECAY_EPOCHS == 0 and FLAGS.PIXEL_BOUND > FLAGS.MIN_BOUND:
-                FLAGS.PIXEL_BOUND =  FLAGS.PIXEL_BOUND * FLAGS.BOUND_DECAY_RATE
+            if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
+                FLAGS.PIXEL_BOUND =  FLAGS.PIXEL_BOUND * FLAGS.BOUND_CHANGE_RATE
             # Update epsilon
-            if (epoch+1) % FLAGS.EPSILON_DECAY_EPOCHS == 0 and FLAGS.EPSILON > FLAGS.MIN_EPSILON:
-                FLAGS.EPSILON =  FLAGS.EPSILON * FLAGS.EPSILON_DECAY_RATE
+            if FLAGS.EPSILON >= FLAGS.MIN_EPSILON and FLAGS.EPSILON <= FLAGS.MAX_EPSILON and (epoch+1) % FLAGS.EPSILON_CHANGE_EPOCHS == 0:
+                FLAGS.EPSILON =  FLAGS.EPSILON * FLAGS.EPSILON_CHANGE_RATE
+            # Update Beta_x
+            if FLAGS.BETA_X >= FLAGS.MIN_BETA_X and FLAGS.BETA_X <= FLAGS.MAX_BETA_X and (epoch+1) % FLAGS.BETA_X_CHANGE_EPOCHS == 0:
+                FLAGS.BETA_X =  FLAGS.BETA_X * FLAGS.BETA_X_CHANGE_RATE
                 
                 
             end_time = time.time()
@@ -249,7 +295,7 @@ def train():
             print("\nValidation")
             valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=total_valid_batch, valid=True)
             # Update global variable
-            if valid_dict["Ly_dist"] <= FLAGS.PARTIAL_THRESHOLD:
+            if valid_dict["Ly_dist_fake"] <= FLAGS.PARTIAL_THRESHOLD:
                 FLAGS.PARTIAL_LOSS = False
                 
             print()
