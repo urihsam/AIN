@@ -23,6 +23,9 @@ def set_flags():
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
     # Loss params
+    flags.DEFINE_string("PARTIAL_LOSS", "LOSS_X", "Use loss x or loss y") # LOSS_X, LOSS_Y
+    flags.DEFINE_integer("LOSS_PERIODS", 2, "Adversarial learning periods") # 2
+    flags.DEFINE_integer("LOSS_X_PERIODS", 1, "Adversarial learning periods for Loss x") # 1
     flags.DEFINE_string("LOSS_MODE_LEAST", "C&W", "How to calculate loss from fake imgae") # ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C&W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_CLEAN", "ENTRO", "How to calculate loss from clean image") # LOGITS, PREDS, ENTRO
@@ -55,7 +58,6 @@ def set_flags():
     flags.DEFINE_float("MAX_BETA_Y_CLEAN", 1, "Maximum of beta Y CLEAN") # 1
 
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
-    flags.DEFINE_bool("PARTIAL_LOSS", False, "Use partial loss or not")
     flags.DEFINE_float("PARTIAL_THRESHOLD", 0.2, "The threshold for partial loss switch")
     flags.DEFINE_float('REG_SCALE', 0.01, 'The scale of regularization')
     # Optimization params

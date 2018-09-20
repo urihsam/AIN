@@ -25,7 +25,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x(graph_dict["beta_x_holder"])
     model_loss_y, (model_ly_least, model_ly_fake, model_ly_clean), (model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean) =\
         model.loss_y(graph_dict["beta_y_l_holder"], graph_dict["beta_y_f_holder"], graph_dict["beta_y_c_holder"])
-    model_loss = model.loss(model_loss_x, model_loss_y)
+    model_loss = model.loss(graph_dict["partial_loss_holder"], model_loss_x, model_loss_y)
     fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, model_loss, model_loss_x,
                model_lx_dist, model_max_dist, model_loss_y, model_ly_least, model_ly_fake, model_ly_clean, 
                model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean,
@@ -143,8 +143,7 @@ def test():
         partial_loss_holder = tf.placeholder(tf.bool, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder,
-                        partial_loss_holder, is_training)
+        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -217,15 +216,14 @@ def train():
         beta_y_l_holder = tf.placeholder(tf.float32, ())
         beta_y_f_holder = tf.placeholder(tf.float32, ())
         beta_y_c_holder = tf.placeholder(tf.float32, ())
-        partial_loss_holder = tf.placeholder(tf.bool, ())
+        partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
         # model
-        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder,
-                        partial_loss_holder, is_training)
+        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
         model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x(beta_x_holder)
         model_loss_y, (model_ly_least, model_ly_fake, model_ly_clean), (model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean) =\
             model.loss_y(beta_y_l_holder, beta_y_f_holder, beta_y_c_holder)
-        model_loss = model.loss(model_loss_x, model_loss_y)
+        model_loss = model.loss(partial_loss_holder, model_loss_x, model_loss_y)
         model_optimization = model.optimization(model_loss)
         merged_summary = tf.summary.merge_all()
 
@@ -262,48 +260,53 @@ def train():
         estop_count = 0
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
-            for train_idx in range(total_train_batch):
-                batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
-                feed_dict = {
-                    images_holder: batch_xs,
-                    label_holder: batch_ys,
-                    low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
-                    up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
-                    epsilon_holder: FLAGS.EPSILON,
-                    beta_x_holder: FLAGS.BETA_X,
-                    beta_y_l_holder: FLAGS.BETA_Y_LEAST,
-                    beta_y_f_holder: FLAGS.BETA_Y_FAKE,
-                    beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
-                    is_training: True,
-                    partial_loss_holder: FLAGS.PARTIAL_LOSS
-                }
-                # optimization
-                fetches = [model_optimization, model_loss, model_loss_x, model_lx_dist, model_max_dist,
-                           model_loss_y, model_ly_least, model_ly_fake, model_ly_clean, 
-                           model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean,
-                           merged_summary, model._target_fake_prediction]
-                _, loss, l_x, Lx_dist, max_dist, l_y, Ly_least, Ly_fake, Ly_clean, Ly_dist_least, Ly_dist_fake, Ly_dist_clean, \
-                    summary, fake_prediction = sess.run(fetches=fetches, feed_dict=feed_dict)
-                
-                #import pdb; pdb.set_trace()
-                train_writer.add_summary(summary, train_idx)
-                # Print info
-                if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
-                    print("Hyper-params info:")
-                    print("Using Partial Loss:", FLAGS.PARTIAL_LOSS)
-                    print("Pixel bound: [{:.4f}, {:.4f}]  Epsilon: {:.4f}".format(
-                        -1.0*FLAGS.PIXEL_BOUND, FLAGS.PIXEL_BOUND, FLAGS.EPSILON))
-                    print("Beta_X: {:.4f}  Beta_Y_LEAST: {:.4f}  Beta_Y_FAKE: {:.4f}  Beta_Y_CLEAN: {:.4f}".format(
-                        FLAGS.BETA_X, FLAGS.BETA_Y_LEAST, FLAGS.BETA_Y_FAKE, FLAGS.BETA_Y_CLEAN
-                    ))
-                    print("Result:")
-                    print("loss = {:.4f}  Loss x = {:.4f}  Loss y = {:.4f}".format(loss, l_x, l_y))
-                    print("Loss y for least = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_least, Ly_fake, Ly_clean))
-                    print("Lx distance = {:.4f} Max pixel distance = {:.4f}".format(Lx_dist, max_dist))
-                    print("Ly distance for least = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
-                        Ly_dist_least, Ly_dist_fake, Ly_dist_clean))
-                    print()
-                    model.tf_save(sess) # save checkpoint
+            FLAGS.PARTIAL_LOSS = "LOSS_X"
+            for p in range(FLAGS.LOSS_PERIODS):
+                for train_idx in range(total_train_batch):
+                    batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
+                    feed_dict = {
+                        images_holder: batch_xs,
+                        label_holder: batch_ys,
+                        low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
+                        up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
+                        epsilon_holder: FLAGS.EPSILON,
+                        beta_x_holder: FLAGS.BETA_X,
+                        beta_y_l_holder: FLAGS.BETA_Y_LEAST,
+                        beta_y_f_holder: FLAGS.BETA_Y_FAKE,
+                        beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
+                        is_training: True,
+                        partial_loss_holder: FLAGS.PARTIAL_LOSS
+                    }
+                    # optimization
+                    fetches = [model_optimization, model_loss, model_loss_x, model_lx_dist, model_max_dist,
+                            model_loss_y, model_ly_least, model_ly_fake, model_ly_clean, 
+                            model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean,
+                            merged_summary, model._target_fake_prediction]
+                    _, loss, l_x, Lx_dist, max_dist, l_y, Ly_least, Ly_fake, Ly_clean, Ly_dist_least, Ly_dist_fake, Ly_dist_clean, \
+                        summary, fake_prediction = sess.run(fetches=fetches, feed_dict=feed_dict)
+                    
+                    #import pdb; pdb.set_trace()
+                    train_writer.add_summary(summary, train_idx)
+                    # Print info
+                    if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
+                        print("Hyper-params info:")
+                        print("Using Partial Loss:", FLAGS.PARTIAL_LOSS)
+                        print("Pixel bound: [{:.4f}, {:.4f}]  Epsilon: {:.4f}".format(
+                            -1.0*FLAGS.PIXEL_BOUND, FLAGS.PIXEL_BOUND, FLAGS.EPSILON))
+                        print("Beta_X: {:.4f}  Beta_Y_LEAST: {:.4f}  Beta_Y_FAKE: {:.4f}  Beta_Y_CLEAN: {:.4f}".format(
+                            FLAGS.BETA_X, FLAGS.BETA_Y_LEAST, FLAGS.BETA_Y_FAKE, FLAGS.BETA_Y_CLEAN
+                        ))
+                        print("Result:")
+                        print("loss = {:.4f}  Loss x = {:.4f}  Loss y = {:.4f}".format(loss, l_x, l_y))
+                        print("Loss y for least = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_least, Ly_fake, Ly_clean))
+                        print("Lx distance = {:.4f} Max pixel distance = {:.4f}".format(Lx_dist, max_dist))
+                        print("Ly distance for least = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
+                            Ly_dist_least, Ly_dist_fake, Ly_dist_clean))
+                        print()
+                        model.tf_save(sess) # save checkpoint
+                if FLAGS.PARTIAL_LOSS == "LOSS_X" and (p+1) >= FLAGS.LOSS_X_PERIODS:
+                    FLAGS.PARTIAL_LOSS = "LOSS_Y"
+                    
             # Update bound
             if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
                 FLAGS.PIXEL_BOUND =  FLAGS.PIXEL_BOUND * FLAGS.BOUND_CHANGE_RATE

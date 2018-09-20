@@ -10,13 +10,12 @@ class AAN:
     Adversarial Attack Network
     """
 
-    def __init__(self, data, label, low_bound, up_bound, attack_epsilon, partial_loss, is_training):
+    def __init__(self, data, label, low_bound, up_bound, attack_epsilon, is_training):
         self.data = data
         self.label = label
         self.output_low_bound = low_bound
         self.output_up_bound = up_bound
         self.attack_epsilon = attack_epsilon
-        self.partial_loss = partial_loss
         self.is_training = is_training
 
         with tf.variable_scope('autoencoder'):
@@ -171,8 +170,8 @@ class AAN:
     
 
     @lazy_method
-    def loss(self, loss_x, loss_y):
-        loss = tf.cond(tf.equal(self.partial_loss, True), lambda: loss_y, lambda: loss_x + loss_y)
+    def loss(self, partial_loss, loss_x, loss_y):
+        loss = tf.cond(tf.equal(partial_loss, "LOSS_X"), lambda: loss_x, lambda: loss_y)
         opt_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "autoencoder")
 
         if FLAGS.REG_SCALE is not None:
