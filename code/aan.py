@@ -91,52 +91,83 @@ class AAN:
     
 
     @lazy_method
-    def loss_y(self, beta_f, beta_c):
-        def loss_y_fake(): # Minimize the distance of prediction from faked data
-            if FLAGS.LOSS_MODE == "LOGITS":
+    def loss_y(self, beta_l, beta_f, beta_c):
+        def loss_y_from_least(): 
+            y_least = tf.argmin(self._target_logits, axis=1, output_type=tf.int32)
+            if FLAGS.LOSS_MODE_LEAST == "ENTRO": # Minimize the distance of prediction from least prob of true data
+                label_least = tf.one_hot(y_least, FLAGS.NUM_CLASSES)
+                Ly_dist = tf.reduce_mean(
+                    tf.nn.softmax_cross_entropy_with_logits_v2(labels = label_least, logits = self._target_adv_logits)
+                    # -tf.reduce_sum(self.label_fake * tf.log(self._target_adv_prediction), 1)
+                )
+            elif FLAGS.LOSS_MODE_LEAST == "C&W": # Maximize the logits at the least prob position of true data
+                mask1 = tf.one_hot(y_least, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+                mask2 = tf.one_hot(y_least, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
+                adv_logits_at_y_least = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
+                adv_logits_max_exclude_y_least = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+                Ly_dist = tf.reduce_mean(
+                    tf.maximum(tf.subtract(adv_logits_max_exclude_y_least, adv_logits_at_y_least), -FLAGS.KAPPA_FOR_LEAST)
+                )
+            return beta_l * Ly_dist, Ly_dist
+
+
+        def loss_y_from_fake(): 
+            if FLAGS.LOSS_MODE_FAKE == "LOGITS": # Minimize the distance of logits from faked data
                 Ly_dist = tf.reduce_mean(
                     # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_logits-self._target_fake_logits), 1))
                     tf.norm(self._target_adv_logits-self._target_fake_logits, ord=2, axis=1)
                 )
-            elif FLAGS.LOSS_MODE == "PREDS":
+            elif FLAGS.LOSS_MODE_FAKE == "PREDS": # Minimize the distance of prediction from faked data
                 Ly_dist = tf.reduce_mean(
                     # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_prediction-self._target_fake_prediction), 1))
                     tf.norm(self._target_adv_prediction-self._target_fake_prediction, ord=2, axis=1)
                 )
-            elif FLAGS.LOSS_MODE == "ENTRO":
+            elif FLAGS.LOSS_MODE_FAKE == "ENTRO": # Minimize the distance of prediction from faked data
                 Ly_dist = tf.reduce_mean(
                     tf.nn.softmax_cross_entropy_with_logits_v2(labels = self.label_fake, logits = self._target_adv_logits)
                     # -tf.reduce_sum(self.label_fake * tf.log(self._target_adv_prediction), 1)
                 )
+            elif FLAGS.LOSS_MODE_FAKE == "C&W": # Maximize the logits at max prob position of faked data
+                y_faked = tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32)
+                mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+                mask2 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
+                adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
+                adv_logits_max_exclude_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+                Ly_dist = tf.reduce_mean(
+                    tf.maximum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), -FLAGS.KAPPA_FOR_FAKE)
+                )
             return beta_f * Ly_dist, Ly_dist
         
-        def loss_y_from_clean(): # Maximize the distance of prediction from clean data
-            if FLAGS.LOSS_MODE == "LOGITS":
-                Ly_dist = tf.reduce_mean(
+        def loss_y_from_clean(): 
+            if FLAGS.LOSS_MODE_CLEAN == "LOGITS": # Maximize the distance of logits from clean data
+                Ly_dist = -1.0 * tf.reduce_mean(
                     # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_logits-self._target_logits), 1))
                     tf.norm(self._target_adv_logits-self._target_logits, ord=2, axis=1)
                 )
-            elif FLAGS.LOSS_MODE == "PREDS":
-                Ly_dist = tf.reduce_mean(
+            elif FLAGS.LOSS_MODE_CLEAN == "PREDS": # Maximize the distance of prediction from clean data
+                Ly_dist = -1.0 * tf.reduce_mean(
                     # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_prediction-self._target_prediction), 1))
                     tf.norm(self._target_adv_prediction-self._target_prediction, ord=2, axis=1)
                 )
-            elif FLAGS.LOSS_MODE == "ENTRO":
-                Ly_dist = tf.reduce_mean(
+            elif FLAGS.LOSS_MODE_CLEAN == "ENTRO": # Maximize the distance of prediction from clean data
+                Ly_dist = -1.0 * tf.reduce_mean(
                     tf.nn.softmax_cross_entropy_with_logits_v2(labels = self.label, logits = self._target_adv_logits)
                     # -tf.reduce_sum(self.label_fake * tf.log(self._target_adv_prediction), 1)
                 )
-            return -1.0 * beta_c * Ly_dist, Ly_dist
+            return beta_c * Ly_dist, Ly_dist
 
-        Ly_fake, Ly_dist_fake = loss_y_fake()
+        Ly_least, Ly_dist_least = loss_y_from_least()
+        Ly_fake, Ly_dist_fake = loss_y_from_fake()
         Ly_clean, Ly_dist_clean = loss_y_from_clean()
-        Ly = Ly_fake + Ly_clean
+        Ly = Ly_least + Ly_fake + Ly_clean
 
+        tf.summary.scalar("Loss_y_least", Ly_least)
+        tf.summary.scalar("Dist_y_least", Ly_dist_least)
         tf.summary.scalar("Loss_y_fake", Ly_fake)
         tf.summary.scalar("Dist_y_fake", Ly_dist_fake)
         tf.summary.scalar("Loss_y_clean", Ly_clean)
         tf.summary.scalar("Dist_y_clean", Ly_dist_clean)
-        return Ly, (Ly_fake, Ly_clean), (Ly_dist_fake, Ly_dist_clean)
+        return Ly, (Ly_least, Ly_fake, Ly_clean), (Ly_dist_least, Ly_dist_fake, Ly_dist_clean)
     
 
     @lazy_method

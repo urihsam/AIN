@@ -23,15 +23,26 @@ def set_flags():
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
     # Loss params
-    flags.DEFINE_string("LOSS_MODE", "ENTRO", "How to calculate loss") # LOGITS, PREDS, ENTRO
+    flags.DEFINE_string("LOSS_MODE_LEAST", "C&W", "How to calculate loss from fake imgae") # ENTRO, C&W
+    flags.DEFINE_string("LOSS_MODE_FAKE", "C&W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C&W
+    flags.DEFINE_string("LOSS_MODE_CLEAN", "ENTRO", "How to calculate loss from clean image") # LOGITS, PREDS, ENTRO
+    ## Kappa
+    flags.DEFINE_float("KAPPA_FOR_LEAST", 10, "The min logits distance") # 10
+    flags.DEFINE_float("KAPPA_FOR_FAKE", 10, "The min logits distance") # 10
     ## Beta x
     flags.DEFINE_float("BETA_X", 0.1, "Coefficient for loss of X") # 0.1
     flags.DEFINE_float("BETA_X_CHANGE_RATE", 1.2, "Change rate of Beta x") # 1.2
     flags.DEFINE_float("BETA_X_CHANGE_EPOCHS", 10, "Change epochs of Beta x") # 10
     flags.DEFINE_float("MIN_BETA_X", 0.1, "Minimum of beta x") # 0.1
     flags.DEFINE_float("MAX_BETA_X", 0.5, "Maximum of beta x") # 0.5
+    ## Beta y least
+    flags.DEFINE_float("BETA_Y_LEAST", 5, "Coefficient for loss of Y LEAST") # 5
+    flags.DEFINE_float("BETA_Y_LEAST_CHANGE_RATE", 1, "Change rate of Beta Y LEAST") # 1
+    flags.DEFINE_float("BETA_Y_LEAST_CHANGE_EPOCHS", 100, "Change epochs of Beta Y LEAST") # 100
+    flags.DEFINE_float("MIN_BETA_Y_LEAST", 50, "Minimum of beta Y LEAST") # 50
+    flags.DEFINE_float("MAX_BETA_Y_LEAST", 50, "Maximum of beta Y LEAST") # 50
     ## Beta y fake
-    flags.DEFINE_float("BETA_Y_FAKE", 50, "Coefficient for loss of Y FAKE") # 50
+    flags.DEFINE_float("BETA_Y_FAKE", 5, "Coefficient for loss of Y FAKE") # 5
     flags.DEFINE_float("BETA_Y_FAKE_CHANGE_RATE", 1, "Change rate of Beta Y FAKE") # 1
     flags.DEFINE_float("BETA_Y_FAKE_CHANGE_EPOCHS", 100, "Change epochs of Beta Y FAKE") # 100
     flags.DEFINE_float("MIN_BETA_Y_FAKE", 50, "Minimum of beta Y FAKE") # 50
