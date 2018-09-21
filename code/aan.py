@@ -171,7 +171,8 @@ class AAN:
 
     @lazy_method
     def loss(self, partial_loss, loss_x, loss_y):
-        loss = tf.cond(tf.equal(partial_loss, "LOSS_X"), lambda: loss_x, lambda: loss_y)
+        partial_loss_func = lambda: tf.cond(tf.equal(partial_loss, "LOSS_X"), lambda: loss_x, lambda: loss_y)
+        loss = tf.cond(tf.equal(partial_loss, "FULL_LOSS"), lambda: loss_x + loss_y, partial_loss_func)
         opt_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "autoencoder")
 
         if FLAGS.REG_SCALE is not None:

@@ -23,12 +23,17 @@ def set_flags():
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
     # Loss params
-    flags.DEFINE_string("PARTIAL_LOSS", "LOSS_X", "Use loss x or loss y") # LOSS_X, LOSS_Y
-    flags.DEFINE_integer("LOSS_PERIODS", 2, "Adversarial learning periods") # 2
-    flags.DEFINE_integer("LOSS_X_PERIODS", 1, "Adversarial learning periods for Loss x") # 1
     flags.DEFINE_string("LOSS_MODE_LEAST", "C&W", "How to calculate loss from fake imgae") # ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C&W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_CLEAN", "ENTRO", "How to calculate loss from clean image") # LOGITS, PREDS, ENTRO
+    ## loss x
+    flags.DEFINE_string("PARTIAL_LOSS", "FULL_LOSS", "Use loss x or loss y") # FULL_LOSS, LOSS_X, LOSS_Y
+    flags.DEFINE_integer("LOSS_CHANGE_FREQUENCY", 5, "The frequency of changing loss") # 5
+    flags.DEFINE_float("LOSS_X_THRESHOLD", 500, "Threshold for loss x") # 500
+    flags.DEFINE_float("LOSS_X_THRE_CHANGE_RATE", 0.8, "Change rate of Loss x threshold") # 0.8
+    flags.DEFINE_float("LOSS_X_THRE_CHANGE_EPOCHS", 10, "Change epochs of Loss x threshold") # 10
+    flags.DEFINE_float("MIN_LOSS_X_THRE", 50, "Minimum threshold for loss x") # 50
+    flags.DEFINE_float("MAX_LOSS_X_THRE", 1500, "Maximum threshold for loss x") # 150
     ## Kappa
     flags.DEFINE_float("KAPPA_FOR_LEAST", 10, "The min logits distance") # 10
     flags.DEFINE_float("KAPPA_FOR_FAKE", 10, "The min logits distance") # 10
@@ -58,7 +63,6 @@ def set_flags():
     flags.DEFINE_float("MAX_BETA_Y_CLEAN", 1, "Maximum of beta Y CLEAN") # 1
 
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
-    flags.DEFINE_float("PARTIAL_THRESHOLD", 0.2, "The threshold for partial loss switch")
     flags.DEFINE_float('REG_SCALE', 0.01, 'The scale of regularization')
     # Optimization params
     flags.DEFINE_string("OPT_TYPE", "ADAM", "The type of optimization") # ADAM, MOME, NEST
