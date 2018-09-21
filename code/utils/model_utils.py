@@ -42,7 +42,7 @@ def set_flags():
     flags.DEFINE_float("BETA_X_CHANGE_RATE", 1.2, "Change rate of Beta x") # 1.2
     flags.DEFINE_float("BETA_X_CHANGE_EPOCHS", 10, "Change epochs of Beta x") # 10
     flags.DEFINE_float("MIN_BETA_X", 0.1, "Minimum of beta x") # 0.1
-    flags.DEFINE_float("MAX_BETA_X", 0.5, "Maximum of beta x") # 0.5
+    flags.DEFINE_float("MAX_BETA_X", 1, "Maximum of beta x") # 0.5
     ## Beta y least
     flags.DEFINE_float("BETA_Y_LEAST", 5, "Coefficient for loss of Y LEAST") # 5
     flags.DEFINE_float("BETA_Y_LEAST_CHANGE_RATE", 1, "Change rate of Beta Y LEAST") # 1
