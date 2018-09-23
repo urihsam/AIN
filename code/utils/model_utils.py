@@ -50,11 +50,11 @@ def set_flags():
     flags.DEFINE_float("MIN_BETA_Y_LEAST", 50, "Minimum of beta Y LEAST") # 50
     flags.DEFINE_float("MAX_BETA_Y_LEAST", 50, "Maximum of beta Y LEAST") # 50
     ## Beta y fake
-    flags.DEFINE_float("BETA_Y_FAKE", 5, "Coefficient for loss of Y FAKE") # 5
-    flags.DEFINE_float("BETA_Y_FAKE_CHANGE_RATE", 1, "Change rate of Beta Y FAKE") # 1
-    flags.DEFINE_float("BETA_Y_FAKE_CHANGE_EPOCHS", 100, "Change epochs of Beta Y FAKE") # 100
+    flags.DEFINE_float("BETA_Y_FAKE", 80, "Coefficient for loss of Y FAKE") # 80
+    flags.DEFINE_float("BETA_Y_FAKE_CHANGE_RATE", 1.2, "Change rate of Beta Y FAKE") # 1.2
+    flags.DEFINE_float("BETA_Y_FAKE_CHANGE_EPOCHS", 10, "Change epochs of Beta Y FAKE") # 10
     flags.DEFINE_float("MIN_BETA_Y_FAKE", 50, "Minimum of beta Y FAKE") # 50
-    flags.DEFINE_float("MAX_BETA_Y_FAKE", 50, "Maximum of beta Y FAKE") # 50
+    flags.DEFINE_float("MAX_BETA_Y_FAKE", 120, "Maximum of beta Y FAKE") # 120
     ## Beta y clean
     flags.DEFINE_float("BETA_Y_CLEAN", 1, "Coefficient for loss of Y CLEAN") # 1
     flags.DEFINE_float("BETA_Y_CLEAN_CHANGE_RATE", 1, "Change rate of Beta Y CLEAN") # 1
