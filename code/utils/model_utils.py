@@ -22,10 +22,18 @@ def set_flags():
     flags.DEFINE_integer("BATCH_SIZE", 128, "Size of training batches")# 128
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
+    # AE type
+    flags.DEFINE_string("AE_TYPE", "TRAD", "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL)
     # Loss params
     flags.DEFINE_string("LOSS_MODE_LEAST", "C&W", "How to calculate loss from fake imgae") # ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C&W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_CLEAN", "ENTRO", "How to calculate loss from clean image") # LOGITS, PREDS, ENTRO
+    ## Gamma for rho distance
+    flags.DEFINE_float("SPARSE_RHO", 0.01, "The sparse threshold for central states of AE")
+    flags.DEFINE_float("GAMMA", 1e-5, "Coefficient for RHO distance") # 0.01
+    ##
+    flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
+    flags.DEFINE_float('REG_SCALE', 0.01, 'The scale of regularization')
     ## loss x
     flags.DEFINE_string("PARTIAL_LOSS", "FULL_LOSS", "Use loss x or loss y") # FULL_LOSS, LOSS_X, LOSS_Y
     flags.DEFINE_integer("LOSS_CHANGE_FREQUENCY", 5, "The frequency of changing loss") # 5
@@ -34,7 +42,7 @@ def set_flags():
     flags.DEFINE_float("LOSS_X_THRE_CHANGE_EPOCHS", 10, "Change epochs of Loss x threshold") # 10
     flags.DEFINE_float("MIN_LOSS_X_THRE", 50, "Minimum threshold for loss x") # 50
     flags.DEFINE_float("MAX_LOSS_X_THRE", 1500, "Maximum threshold for loss x") # 150
-    ## Kappa
+    ## Kappa: C&W loss
     flags.DEFINE_float("KAPPA_FOR_LEAST", 10, "The min logits distance") # 10
     flags.DEFINE_float("KAPPA_FOR_FAKE", 10, "The min logits distance") # 10
     ## Beta x
@@ -61,9 +69,6 @@ def set_flags():
     flags.DEFINE_float("BETA_Y_CLEAN_CHANGE_EPOCHS", 100, "Change epochs of Beta Y CLEAN") # 100
     flags.DEFINE_float("MIN_BETA_Y_CLEAN", 1, "Minimum of beta Y CLEAN") # 1
     flags.DEFINE_float("MAX_BETA_Y_CLEAN", 1, "Maximum of beta Y CLEAN") # 1
-
-    flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
-    flags.DEFINE_float('REG_SCALE', 0.01, 'The scale of regularization')
     # Optimization params
     flags.DEFINE_string("OPT_TYPE", "ADAM", "The type of optimization") # ADAM, MOME, NEST
     flags.DEFINE_float("BATCH_MOME", 0.99, "Momentum for the moving average")

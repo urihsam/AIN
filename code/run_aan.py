@@ -25,7 +25,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x(graph_dict["beta_x_holder"])
     model_loss_y, (model_ly_least, model_ly_fake, model_ly_clean), (model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean) =\
         model.loss_y(graph_dict["beta_y_l_holder"], graph_dict["beta_y_f_holder"], graph_dict["beta_y_c_holder"])
-    model_loss = model.loss(graph_dict["partial_loss_holder"], model_loss_x, model_loss_y)
+    model_loss, model_sparse_loss, model_reg = model.loss(graph_dict["partial_loss_holder"], model_loss_x, model_loss_y)
     fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, model_loss, model_loss_x,
                model_lx_dist, model_max_dist, model_loss_y, model_ly_least, model_ly_fake, model_ly_clean, 
                model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean,
@@ -100,7 +100,8 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     print('Original accuracy: {0:0.5f}'.format(acc))
     print('Faked accuracy: {0:0.5f}'.format(fake_acc))
     print('Attacked accuracy: {0:0.5f}'.format(adv_acc))
-    print("loss = {:.4f}  Loss x = {:.4f}  Loss y = {:.4f}".format(loss, l_x, l_y))
+    print("loss = {:.4f}  Loss sparse = {:.4f}  Loss reg = {:.4f}  Loss x = {:.4f}  Loss y = {:.4f}".format(
+        loss, sparse_loss, reg, l_x, l_y))
     print("Loss y for least = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_least, Ly_fake, Ly_clean))
     print("Lx distance = {:.4f} Max pixel distance = {:.4f}".format(Lx_dist, max_dist))
     print("Ly distance for least = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
@@ -223,7 +224,7 @@ def train():
         model_loss_x, model_lx_dist, model_max_dist, _ = model.loss_x(beta_x_holder)
         model_loss_y, (model_ly_least, model_ly_fake, model_ly_clean), (model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean) =\
             model.loss_y(beta_y_l_holder, beta_y_f_holder, beta_y_c_holder)
-        model_loss = model.loss(partial_loss_holder, model_loss_x, model_loss_y)
+        model_loss, model_sparse_loss, model_reg = model.loss(partial_loss_holder, model_loss_x, model_loss_y)
         model_optimization = model.optimization(model_loss)
         merged_summary = tf.summary.merge_all()
 
@@ -277,11 +278,13 @@ def train():
                     partial_loss_holder: FLAGS.PARTIAL_LOSS
                 }
                 # optimization
-                fetches = [model_optimization, model_loss, model_loss_x, model_lx_dist, model_max_dist,
+                fetches = [model_optimization, model_loss, model_sparse_loss, model_reg, 
+                        model_loss_x, model_lx_dist, model_max_dist,
                         model_loss_y, model_ly_least, model_ly_fake, model_ly_clean, 
                         model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean,
                         merged_summary, model._target_fake_prediction]
-                _, loss, l_x, Lx_dist, max_dist, l_y, Ly_least, Ly_fake, Ly_clean, Ly_dist_least, Ly_dist_fake, Ly_dist_clean, \
+                _, loss, sparse_loss, reg, l_x, Lx_dist, max_dist, l_y, Ly_least, Ly_fake, Ly_clean, \
+                    Ly_dist_least, Ly_dist_fake, Ly_dist_clean, \
                     summary, fake_prediction = sess.run(fetches=fetches, feed_dict=feed_dict)
                 
                 #import pdb; pdb.set_trace()
@@ -296,7 +299,8 @@ def train():
                         FLAGS.BETA_X, FLAGS.BETA_Y_LEAST, FLAGS.BETA_Y_FAKE, FLAGS.BETA_Y_CLEAN
                     ))
                     print("Result:")
-                    print("loss = {:.4f}  Loss x = {:.4f}  Loss y = {:.4f}".format(loss, l_x, l_y))
+                    print("loss = {:.4f}  Loss sparse = {:.4f}  Loss reg = {:.4f}  Loss x = {:.4f}  Loss y = {:.4f}".format(
+                        loss, sparse_loss, reg, l_x, l_y))
                     print("Loss y for least = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_least, Ly_fake, Ly_clean))
                     print("Lx distance = {:.4f} Max pixel distance = {:.4f}".format(Lx_dist, max_dist))
                     print("Ly distance for least = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
