@@ -1,12 +1,12 @@
 #!/bin/bash
-python3 ./code/run_aan.py --train --NUM_EPOCHS 200 --BATCH_SIZE 64 --EVAL_FREQUENCY 50\
+python3 ./code/run_aan.py --train --NUM_EPOCHS 200 --BATCH_SIZE 128 --EVAL_FREQUENCY 25\
     --AE_TYPE SPARSE\
     --SPARSE_RHO 20\
     --GAMMA 0.5\
     --EARLY_STOPPING_THRESHOLD 10\
-    --BETA_X 0.25\
+    --BETA_X 1\
     --BETA_X_CHANGE_RATE 1.2\
-    --BETA_X_CHANGE_EPOCHS 8\
+    --BETA_X_CHANGE_EPOCHS 10\
     --BETA_Y_LEAST 0\
     --BETA_Y_FAKE 80\
     --BETA_Y_FAKE_CHANGE_RATE 1.2\

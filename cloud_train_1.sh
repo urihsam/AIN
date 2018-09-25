@@ -1,10 +1,10 @@
 #!/bin/bash
-python3 ./code/run_aan.py --train --NUM_EPOCHS 200 --BATCH_SIZE 64 --EVAL_FREQUENCY 50\
+python3 ./code/run_aan.py --train --NUM_EPOCHS 200 --BATCH_SIZE 128 --EVAL_FREQUENCY 25\
     --AE_TYPE TRAD\
     --EARLY_STOPPING_THRESHOLD 10\
-    --BETA_X 0.25\
+    --BETA_X 0.2\
     --BETA_X_CHANGE_RATE 1.2\
-    --BETA_X_CHANGE_EPOCHS 8\
+    --BETA_X_CHANGE_EPOCHS 10\
     --BETA_Y_LEAST 0\
     --BETA_Y_FAKE 80\
     --BETA_Y_FAKE_CHANGE_RATE 1.2\
@@ -13,8 +13,6 @@ python3 ./code/run_aan.py --train --NUM_EPOCHS 200 --BATCH_SIZE 64 --EVAL_FREQUE
     --PIXEL_BOUND 64\
     --BOUND_CHANGE_RATE 0.8\
     --BOUND_CHANGE_EPOCHS 10\
-    --EPSILON 64\
-    --EPSILON_CHANGE_RATE 0.8\
-    --EPSILON_CHANGE_EPOCHS 10\
+    --EPSILON 1\
     --FGM_ITERS 2
     

@@ -23,8 +23,8 @@ class AAN:
             if FLAGS.AE_TYPE == "SPARSE":
                 print("Using Sparse Convolutional Autoencoder")
                 self._autoencoder = scae.SCAE(output_low_bound=self.output_low_bound, 
-                                          output_up_bound=self.output_up_bound
-                                         )
+                                              output_up_bound=self.output_up_bound
+                                             )
             else:
                 print("Using Convolutional Autoencoder")
                 self._autoencoder = cae.CAE(output_low_bound=self.output_low_bound, 

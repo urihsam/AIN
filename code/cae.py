@@ -12,22 +12,22 @@ class CAE:
                  output_up_bound,
                  # conv layers
                  conv_filter_size=[3,3], 
-                 conv_channel_sizes=[256, 256, 256, 256, 3],
+                 conv_channel_sizes=[128, 128, 128, 128, 1], #[256, 256, 256, 1]
                  conv_leaky_ratio=[0.2, 0.4, 0.4, 0.2, 0.2],
                  # deconv layers
                  decv_filter_size=[3,3], 
-                 decv_channel_sizes=[3, 256, 256, 256, 256],
+                 decv_channel_sizes=[1, 128, 128, 128, 128], #[1, 256, 256, 256]
                  decv_leaky_ratio=[0.2, 0.2, 0.4, 0.4, 0],
                  # encoder fc layers
                  enfc_state_sizes=[4096], 
                  enfc_leaky_ratio=[0.2, 0.2],
-                 enfc_drop_rate=[0.5, 0.5],
+                 enfc_drop_rate=[0, 0.75],
                  # bottleneck
-                 center_state_size=4096, 
+                 center_state_size=1024, 
                  # decoder fc layers
                  defc_state_sizes=[4096],
                  defc_leaky_ratio=[0.2, 0.2],
-                 defc_drop_rate=[0.5, 0.5],
+                 defc_drop_rate=[0.75, 0],
                  # switch
                  use_batch_norm = False
                 ):
@@ -218,6 +218,7 @@ class CAE:
                 net = ne.batch_norm(net, self.is_training)
             if layer_id == self.num_decv-1: # last layer
                 net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.output_low_bound, self.output_up_bound) # Nonlinear act
+                #net = tf.tanh(net)
             else:
                 #net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.output_low_bound, self.output_up_bound) # Nonlinear act
                 net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])

@@ -26,8 +26,8 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     model_loss_y, (model_ly_least, model_ly_fake, model_ly_clean), (model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean) =\
         model.loss_y(graph_dict["beta_y_l_holder"], graph_dict["beta_y_f_holder"], graph_dict["beta_y_c_holder"])
     model_loss, model_sparse_loss, model_reg = model.loss(graph_dict["partial_loss_holder"], model_loss_x, model_loss_y)
-    fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, model_loss, model_loss_x,
-               model_lx_dist, model_max_dist, model_loss_y, model_ly_least, model_ly_fake, model_ly_clean, 
+    fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, model_loss, model_sparse_loss, model_reg,
+               model_loss_x, model_lx_dist, model_max_dist, model_loss_y, model_ly_least, model_ly_fake, model_ly_clean, 
                model_ly_dist_least, model_ly_dist_fake, model_ly_dist_clean,
                graph_dict["merged_summary"]]
     if total_batch is None:
@@ -37,7 +37,8 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             total_batch = int(data.test_size/FLAGS.BATCH_SIZE)
     else: total_batch = total_batch
 
-    acc = 0; adv_acc = 0; fake_acc = 0; loss = 0; 
+    acc = 0; adv_acc = 0; fake_acc = 0; 
+    loss = 0; sparse_loss = 0; reg = 0;
     l_x = 0; Lx_dist = 0; max_dist = 0; 
     l_y = 0; Ly_least = 0; Ly_fake = 0; Ly_clean = 0; 
     Ly_dist_least = 0; Ly_dist_fake = 0; Ly_dist_clean = 0
@@ -61,7 +62,8 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             graph_dict["is_training"]: False
         }
         
-        batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_l_x, batch_Lx_dist, batch_max_dist, \
+        batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_sparse_loss, batch_reg, \
+            batch_l_x, batch_Lx_dist, batch_max_dist, \
             batch_l_y, batch_Ly_least, batch_Ly_fake, batch_Ly_clean,\
             batch_Ly_dist_least, batch_Ly_dist_fake, batch_Ly_dist_clean, \
             summary = sess.run(fetches=fetches, feed_dict=feed_dict)
@@ -70,6 +72,8 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
         adv_acc += batch_adv_acc
         fake_acc += batch_fake_acc
         loss += batch_loss
+        sparse_loss += batch_sparse_loss
+        reg += batch_reg
         l_x += batch_l_x
         Lx_dist += batch_Lx_dist
         max_dist += batch_max_dist
@@ -85,6 +89,8 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     adv_acc /= total_batch
     fake_acc /= total_batch
     loss /= total_batch
+    sparse_loss /= total_batch
+    reg /= total_batch
     l_x /= total_batch
     Lx_dist /= total_batch
     max_dist /= total_batch
@@ -321,9 +327,9 @@ def train():
             # Update bound
             if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
                 FLAGS.PIXEL_BOUND =  FLAGS.PIXEL_BOUND * FLAGS.BOUND_CHANGE_RATE
-            # Update epsilon
+            """# Update epsilon
             if FLAGS.EPSILON >= FLAGS.MIN_EPSILON and FLAGS.EPSILON <= FLAGS.MAX_EPSILON and (epoch+1) % FLAGS.EPSILON_CHANGE_EPOCHS == 0:
-                FLAGS.EPSILON =  FLAGS.EPSILON * FLAGS.EPSILON_CHANGE_RATE
+                FLAGS.EPSILON =  FLAGS.EPSILON * FLAGS.EPSILON_CHANGE_RATE"""
             # Update Beta_x
             if FLAGS.BETA_X >= FLAGS.MIN_BETA_X and FLAGS.BETA_X <= FLAGS.MAX_BETA_X and (epoch+1) % FLAGS.BETA_X_CHANGE_EPOCHS == 0:
                 FLAGS.BETA_X =  FLAGS.BETA_X * FLAGS.BETA_X_CHANGE_RATE

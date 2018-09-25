@@ -29,7 +29,7 @@ def set_flags():
     flags.DEFINE_string("LOSS_MODE_FAKE", "C&W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_CLEAN", "ENTRO", "How to calculate loss from clean image") # LOGITS, PREDS, ENTRO
     ## Gamma for rho distance
-    flags.DEFINE_float("SPARSE_RHO", 0.01, "The sparse threshold for central states of AE")
+    flags.DEFINE_float("SPARSE_RHO", 10, "The sparse threshold for central states of AE")
     flags.DEFINE_float("GAMMA", 1e-5, "Coefficient for RHO distance") # 0.01
     ##
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
@@ -46,11 +46,11 @@ def set_flags():
     flags.DEFINE_float("KAPPA_FOR_LEAST", 10, "The min logits distance") # 10
     flags.DEFINE_float("KAPPA_FOR_FAKE", 10, "The min logits distance") # 10
     ## Beta x
-    flags.DEFINE_float("BETA_X", 0.1, "Coefficient for loss of X") # 0.1
+    flags.DEFINE_float("BETA_X", 0.1, "Coefficient for loss of X") # 1
     flags.DEFINE_float("BETA_X_CHANGE_RATE", 1.2, "Change rate of Beta x") # 1.2
     flags.DEFINE_float("BETA_X_CHANGE_EPOCHS", 10, "Change epochs of Beta x") # 10
     flags.DEFINE_float("MIN_BETA_X", 0.1, "Minimum of beta x") # 0.1
-    flags.DEFINE_float("MAX_BETA_X", 1, "Maximum of beta x") # 0.5
+    flags.DEFINE_float("MAX_BETA_X", 10, "Maximum of beta x") # 10
     ## Beta y least
     flags.DEFINE_float("BETA_Y_LEAST", 5, "Coefficient for loss of Y LEAST") # 5
     flags.DEFINE_float("BETA_Y_LEAST_CHANGE_RATE", 1, "Change rate of Beta Y LEAST") # 1
@@ -83,10 +83,10 @@ def set_flags():
     flags.DEFINE_float("MIN_BOUND", 4, "Minimum bound for pixel distance") # 4
     flags.DEFINE_float("MAX_BOUND", 128, "Maximum bound for pixel distance") # 128
     # Attack params
-    flags.DEFINE_float("EPSILON", 128, "Epsilon for fgm attack") # 128
+    flags.DEFINE_float("EPSILON", 1, "Epsilon for fgm attack") # 128
     flags.DEFINE_float("EPSILON_CHANGE_RATE", 0.8, "Epsilon change rate") # 128
-    flags.DEFINE_float("EPSILON_CHANGE_EPOCHS", 2, "Num of epochs for epsilon change") # 2
-    flags.DEFINE_float("MIN_EPSILON", 4, "Minimum epsilon for fgm attack") # 4
+    flags.DEFINE_float("EPSILON_CHANGE_EPOCHS", 100, "Num of epochs for epsilon change") # 100
+    flags.DEFINE_float("MIN_EPSILON", 0.1, "Minimum epsilon for fgm attack") # 4
     flags.DEFINE_float("MAX_EPSILON", 128, "Maximum epsilon for fgm attack") # 128
     flags.DEFINE_integer("FGM_ITERS", 1, "Iteration for fgm attack") # 1
     

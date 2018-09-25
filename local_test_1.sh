@@ -4,7 +4,7 @@ python ./code/run_aan.py --local --NUM_EPOCHS 1 --BATCH_SIZE 64 --EVAL_FREQUENCY
     --SPARSE_RHO 20\
     --GAMMA 0.5\
     --EARLY_STOPPING_THRESHOLD 20\
-    --BETA_X 0.25\
+    --BETA_X 1\
     --BETA_Y_LEAST 0\
     --BETA_Y_FAKE 80\
     --BETA_Y_CLEAN 1\
