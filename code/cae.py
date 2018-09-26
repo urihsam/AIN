@@ -11,23 +11,23 @@ class CAE:
                  output_low_bound, 
                  output_up_bound,
                  # conv layers
-                 conv_filter_sizes=[[3,3], [3,3], [3,3], [3,3], [4,4]], 
-                 conv_strides = [[1,1], [1,1], [1,1], [1,1], [4,4]],
-                 conv_padding = ["SAME", "SAME", "SAME", "SAME", "VALID"],
-                 conv_channel_sizes=[128, 128, 128, 128, 32],
-                 conv_leaky_ratio=[0.2, 0.4, 0.4, 0.2, 0.2],
+                 conv_filter_sizes=[3,3], #[[3,3], [3,3], [3,3], [3,3], [3,3]], 
+                 conv_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
+                 conv_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
+                 conv_channel_sizes=[128, 128, 128, 64, 64, 64, 3],
+                 conv_leaky_ratio=[0.4, 0.4, 0.4, 0.2, 0.2, 0.2, 0.1],
                  # deconv layers
-                 decv_filter_sizes=[[4,4], [3,3], [3,3], [3,3], [3,3]], 
-                 decv_strides = [[4,4], [1,1], [1,1], [1,1], [1,1]],
-                 decv_padding = ["VALID", "SAME", "SAME", "SAME", "SAME"],
-                 decv_channel_sizes=[32, 128, 128, 128, 128],
-                 decv_leaky_ratio=[0.2, 0.2, 0.4, 0.4, 0],
+                 decv_filter_sizes=[3,3], #[[3,3], [3,3], [3,3], [3,3], [3,3]], 
+                 decv_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
+                 decv_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
+                 decv_channel_sizes=[3, 64, 64, 64, 128, 128, 128],
+                 decv_leaky_ratio=[0.1, 0.2, 0.2, 0.2, 0.4, 0.4, 0.4],
                  # encoder fc layers
                  enfc_state_sizes=[4096], 
                  enfc_leaky_ratio=[0.2, 0.2],
                  enfc_drop_rate=[0, 0.75],
                  # bottleneck
-                 center_state_size=1024, 
+                 center_state_size=2048, 
                  # decoder fc layers
                  defc_state_sizes=[4096],
                  defc_leaky_ratio=[0.2, 0.2],
@@ -36,15 +36,33 @@ class CAE:
                  use_batch_norm = False
                 ):
         # conv layers
-        self.conv_filter_sizes = conv_filter_sizes
-        self.conv_strides = conv_strides
-        self.conv_padding = conv_padding
+        if isinstance(conv_filter_sizes[0], list):
+            self.conv_filter_sizes = conv_filter_sizes
+        else:
+            self.conv_filter_sizes = [conv_filter_sizes] * len(conv_channel_sizes)
+        if isinstance(conv_strides[0], list):
+            self.conv_strides = conv_strides
+        else:
+            self.conv_strides = [conv_strides] * len(conv_channel_sizes)
+        if isinstance(conv_padding, str):
+            self.conv_padding = [conv_padding] * len(conv_channel_sizes)
+        else:
+            self.conv_padding = conv_padding
         self.conv_channel_sizes = conv_channel_sizes
         self.conv_leaky_ratio = conv_leaky_ratio
         # deconv layers
-        self.decv_filter_sizes = decv_filter_sizes
-        self.decv_strides = decv_strides
-        self.decv_padding = decv_padding
+        if isinstance(decv_filter_sizes[0], list):
+            self.decv_filter_sizes = decv_filter_sizes
+        else:
+            self.decv_filter_sizes = [decv_filter_sizes] * len(decv_channel_sizes)
+        if isinstance(decv_strides[0], list):
+            self.decv_strides = decv_strides
+        else:
+            self.decv_strides = [decv_strides] * len(decv_channel_sizes)
+        if isinstance(decv_padding, str):
+            self.decv_padding = [decv_padding] * len(decv_channel_sizes)
+        else:
+            self.decv_padding = decv_padding
         self.decv_channel_sizes = decv_channel_sizes
         self.decv_leaky_ratio = decv_leaky_ratio
         # encoder fc layers
@@ -63,16 +81,8 @@ class CAE:
         # switch
         self.use_batch_norm = use_batch_norm
 
-        self.conv_out_filter = self.conv_filter_sizes[-1]
-        self.conv_out_stride = self.conv_strides[-1]
-        self.conv_out_shape = [int(np.floor((FLAGS.IMAGE_ROWS-self.conv_out_filter[0])/self.conv_out_stride[0]))+1, 
-                               int(np.floor((FLAGS.IMAGE_COLS-self.conv_out_filter[1])/self.conv_out_stride[1]))+1, 
-                               self.conv_channel_sizes[-1]]
-        self.decv_in_filter = self.decv_filter_sizes[0]
-        self.decv_in_stride = self.decv_strides[0]
-        self.decv_in_shape = [int(np.floor((FLAGS.IMAGE_ROWS-self.decv_in_filter[0])/self.decv_in_stride[0]))+1, 
-                              int(np.floor((FLAGS.IMAGE_COLS-self.decv_in_filter[1])/self.decv_in_stride[1]))+1,
-                              self.decv_channel_sizes[0]]
+        self.conv_out_shape = [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.conv_channel_sizes[-1]]
+        self.decv_in_shape = [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.decv_channel_sizes[0]]
         self.decv_out_dim = [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS]
 
         self.conv_filters, self.conv_biases, self.num_conv = self.conv_weights_biases()
