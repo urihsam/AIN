@@ -60,20 +60,20 @@ def drop_out(x, drop_rate, is_training):
         return tf.layers.dropout(x, drop_rate, training=is_training)
 
 
-def conv2d(x, filters, biases):
+def conv2d(x, filters, biases, strides, padding):
     """
     """
-    return tf.nn.conv2d(x, filters, strides=[1, 1, 1, 1], padding="SAME")+ biases
+    return tf.nn.conv2d(x, filters, strides=[1, strides[0], strides[1], 1], padding=padding)+ biases
 
 
-def conv2d_transpose(x, filters, biases):
+def conv2d_transpose(x, out_dim, filters, biases, strides, padding):
     """
     """
-    output_shape = [tf.shape(x)[0]] + x.get_shape()[1:-1].concatenate(filters.get_shape()[-2]).as_list()
+    output_shape = [tf.shape(x)[0]] + out_dim + [filters.get_shape().as_list()[-2]]
     #output_shape[1] *= 2
     #output_shape[2] *= 2
     #import pdb; pdb.set_trace()
-    return tf.nn.conv2d_transpose(x, filters, output_shape, strides=[1, 1, 1, 1], padding="SAME") + biases
+    return tf.nn.conv2d_transpose(x, filters, output_shape, strides=[1, strides[0], strides[1], 1], padding=padding) + biases
 
 
 def max_pool_2x2(x):

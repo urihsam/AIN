@@ -11,12 +11,16 @@ class CAE:
                  output_low_bound, 
                  output_up_bound,
                  # conv layers
-                 conv_filter_size=[3,3], 
-                 conv_channel_sizes=[128, 128, 128, 128, 1], #[256, 256, 256, 1]
+                 conv_filter_sizes=[[3,3], [3,3], [3,3], [3,3], [4,4]], 
+                 conv_strides = [[1,1], [1,1], [1,1], [1,1], [4,4]],
+                 conv_padding = ["SAME", "SAME", "SAME", "SAME", "VALID"],
+                 conv_channel_sizes=[128, 128, 128, 128, 32],
                  conv_leaky_ratio=[0.2, 0.4, 0.4, 0.2, 0.2],
                  # deconv layers
-                 decv_filter_size=[3,3], 
-                 decv_channel_sizes=[1, 128, 128, 128, 128], #[1, 256, 256, 256]
+                 decv_filter_sizes=[[4,4], [3,3], [3,3], [3,3], [3,3]], 
+                 decv_strides = [[4,4], [1,1], [1,1], [1,1], [1,1]],
+                 decv_padding = ["VALID", "SAME", "SAME", "SAME", "SAME"],
+                 decv_channel_sizes=[32, 128, 128, 128, 128],
                  decv_leaky_ratio=[0.2, 0.2, 0.4, 0.4, 0],
                  # encoder fc layers
                  enfc_state_sizes=[4096], 
@@ -32,11 +36,15 @@ class CAE:
                  use_batch_norm = False
                 ):
         # conv layers
-        self.conv_filter_size = conv_filter_size
+        self.conv_filter_sizes = conv_filter_sizes
+        self.conv_strides = conv_strides
+        self.conv_padding = conv_padding
         self.conv_channel_sizes = conv_channel_sizes
         self.conv_leaky_ratio = conv_leaky_ratio
         # deconv layers
-        self.decv_filter_size = decv_filter_size 
+        self.decv_filter_sizes = decv_filter_sizes
+        self.decv_strides = decv_strides
+        self.decv_padding = decv_padding
         self.decv_channel_sizes = decv_channel_sizes
         self.decv_leaky_ratio = decv_leaky_ratio
         # encoder fc layers
@@ -55,8 +63,17 @@ class CAE:
         # switch
         self.use_batch_norm = use_batch_norm
 
-        self.conv_out_shape = [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.conv_channel_sizes[-1]]
-        self.decv_in_shape = [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.decv_channel_sizes[0]]
+        self.conv_out_filter = self.conv_filter_sizes[-1]
+        self.conv_out_stride = self.conv_strides[-1]
+        self.conv_out_shape = [int(np.floor((FLAGS.IMAGE_ROWS-self.conv_out_filter[0])/self.conv_out_stride[0]))+1, 
+                               int(np.floor((FLAGS.IMAGE_COLS-self.conv_out_filter[1])/self.conv_out_stride[1]))+1, 
+                               self.conv_channel_sizes[-1]]
+        self.decv_in_filter = self.decv_filter_sizes[0]
+        self.decv_in_stride = self.decv_strides[0]
+        self.decv_in_shape = [int(np.floor((FLAGS.IMAGE_ROWS-self.decv_in_filter[0])/self.decv_in_stride[0]))+1, 
+                              int(np.floor((FLAGS.IMAGE_COLS-self.decv_in_filter[1])/self.decv_in_stride[1]))+1,
+                              self.decv_channel_sizes[0]]
+        self.decv_out_dim = [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS]
 
         self.conv_filters, self.conv_biases, self.num_conv = self.conv_weights_biases()
         self.enfc_weights, self.enfc_biases, self.num_enfc = self.enfc_weights_biases()
@@ -66,26 +83,26 @@ class CAE:
 
     @lazy_method
     def conv_weights_biases(self):
-        return self._conv_weights_biases("W_conv", "b_conv", self.conv_filter_size, FLAGS.NUM_CHANNELS, self.conv_channel_sizes)
+        return self._conv_weights_biases("W_conv", "b_conv", self.conv_filter_sizes, FLAGS.NUM_CHANNELS, self.conv_channel_sizes)
 
 
     @lazy_method
     def decv_weights_biases(self):
         in_channel = self.decv_channel_sizes[0]
         channel_sizes = self.decv_channel_sizes[1:] + [FLAGS.NUM_CHANNELS]
-        return self._conv_weights_biases("W_decv", "b_decv", self.decv_filter_size, in_channel, channel_sizes, True)
+        return self._conv_weights_biases("W_decv", "b_decv", self.decv_filter_sizes, in_channel, channel_sizes, True)
     
 
-    def _conv_weights_biases(self, W_name, b_name, filter_size, in_channel, channel_sizes, transpose=False):
+    def _conv_weights_biases(self, W_name, b_name, filter_sizes, in_channel, channel_sizes, transpose=False):
         num_layer = len(channel_sizes)
         _weights = {}
         _biases = {}
         for idx in range(num_layer):
             W_key = "{}{}".format(W_name, idx)
             if transpose:
-                W_shape = filter_size+[channel_sizes[idx], in_channel]
+                W_shape = filter_sizes[idx]+[channel_sizes[idx], in_channel]
             else:
-                W_shape = filter_size+[in_channel, channel_sizes[idx]]
+                W_shape = filter_sizes[idx]+[in_channel, channel_sizes[idx]]
             _weights[W_key] = ne.weight_variable(W_shape, name=W_key)
 
             b_key = "{}{}".format(b_name, idx)
@@ -147,15 +164,17 @@ class CAE:
             curr_filter = self.conv_filters[filter_name]
             curr_bias = self.conv_biases[bias_name]
             # convolution
-            net = ne.conv2d(net, filters=curr_filter, biases=curr_bias)
+            net = ne.conv2d(net, filters=curr_filter, biases=curr_bias, 
+                            strides=self.conv_strides[layer_id], 
+                            padding=self.conv_padding[layer_id])
             # batch normalization
             if self.use_batch_norm:
                 net = ne.batch_norm(net, self.is_training)
             #net = ne.leaky_brelu(net, self.conv_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
             net = ne.leaky_relu(net, self.conv_leaky_ratio[layer_id])
             #net = ne.max_pool_2x2(net) # Pooling
-
         net = tf.identity(net, name='output')
+        #import pdb; pdb.set_trace()
         return net
 
 
@@ -200,6 +219,7 @@ class CAE:
 
         net = tf.identity(net, name='output')
         net = tf.reshape(net, [-1] + self.decv_in_shape)
+        #import pdb; pdb.set_trace()
         return net
 
     
@@ -212,7 +232,10 @@ class CAE:
             curr_filter = self.decv_filters[filter_name]
             curr_bias = self.decv_biases[bias_name]
             # de-convolution
-            net = ne.conv2d_transpose(net, filters=curr_filter, biases=curr_bias)
+            net = ne.conv2d_transpose(net, out_dim=self.decv_out_dim, 
+                                      filters=curr_filter, biases=curr_bias,
+                                      strides=self.decv_strides[layer_id], 
+                                      padding=self.decv_padding[layer_id])
             # batch normalization
             if self.use_batch_norm:
                 net = ne.batch_norm(net, self.is_training)
@@ -223,7 +246,6 @@ class CAE:
                 #net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.output_low_bound, self.output_up_bound) # Nonlinear act
                 net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])
                 #net = ne.elu(net)
-
         net = tf.identity(net, name='output')
         net = tf.reshape(net, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
         #import pdb; pdb.set_trace()
