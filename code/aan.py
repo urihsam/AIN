@@ -68,54 +68,57 @@ class AAN:
         
 
     @lazy_method
-    def loss_x(self, beta):
-        loss_betaX = beta
+    def loss_x(self, beta_t, beta_f):
+        x_adv = self.vectorize(self._autoencoder_prediction) # adv
+        x_true = self.vectorize(self.data)
+        x_fake = self.vectorize(self.data_fake)
+        
+        max_dist_true = tf.reduce_max(tf.abs(x_adv-x_true))
+        max_dist_fake = tf.reduce_max(tf.abs(x_adv-x_fake))
+        def norm_dist(vec1, vec2):
+            if FLAGS.NORM_TYPE == "L2":
+                #Lx_dist = tf.reduce_mean(tf.sqrt(tf.reduce_sum((y_pred-y_true)**2, 1)))
+                Lx_dist = tf.reduce_mean(tf.norm(vec1-vec2, ord=2, axis=1))
+            if FLAGS.NORM_TYPE == "L1":
+                #Lx_dist = tf.reduce_mean(tf.reduce_sum(tf.abs(y_pred-y_true), 1))
+                Lx_dist = tf.reduce_mean(tf.norm(vec1-vec2, ord=1, axis=1))
+            elif FLAGS.NORM_TYPE == "INF":
+                #Lx_dist = tf.reduce_mean(tf.reduce_max(tf.abs(y_pred-y_true), 1))]
+                Lx_dist = tf.reduce_mean(tf.norm(vec1-vec2, ord=np.inf, axis=1))
+            return Lx_dist
+            
+        Lx_dist_true = norm_dist(x_adv, x_true)
+        Lx_true = beta_t * Lx_dist_true
 
-        y_pred = self.vectorize(self._autoencoder_prediction) # adv
-        y_true = self.vectorize(self.data)
-        """
-        Lx is for the distance loss between examples and adv_examples;
-        Ly is for the prediction loss between examples and adv_examples
-        """
-        max_dist = tf.reduce_max(tf.abs(y_pred-y_true))
-        if FLAGS.NORM_TYPE == "L2":
-            #Lx_dist = tf.reduce_mean(tf.sqrt(tf.reduce_sum((y_pred-y_true)**2, 1)))
-            Lx_dist = tf.reduce_mean(tf.norm(y_pred-y_true, ord=2, axis=1))
-        if FLAGS.NORM_TYPE == "L1":
-            #Lx_dist = tf.reduce_mean(tf.reduce_sum(tf.abs(y_pred-y_true), 1))
-            Lx_dist = tf.reduce_mean(tf.norm(y_pred-y_true, ord=1, axis=1))
-        elif FLAGS.NORM_TYPE == "INF":
-            #Lx_dist = tf.reduce_mean(tf.reduce_max(tf.abs(y_pred-y_true), 1))]
-            Lx_dist = tf.reduce_mean(tf.norm(y_pred-y_true, ord=np.inf, axis=1))
-            
-            
-        Lx = loss_betaX * Lx_dist
+        Lx_dist_fake = norm_dist(x_adv, x_fake)
+        Lx_fake = beta_f * Lx_dist_fake
+
+        Lx = Lx_true + Lx_fake
 
         tf.summary.scalar("Loss_x", Lx)
-        tf.summary.scalar("Dist_x", Lx_dist)
-        tf.summary.scalar("Max_pixel_dist", max_dist)
-        return Lx, Lx_dist, max_dist, (y_pred, y_true)
+        tf.summary.scalar("Loss_x_true", Lx_true)
+        tf.summary.scalar("Loss_x_fake", Lx_fake)
+        tf.summary.scalar("Dist_x_true", Lx_dist_true)
+        tf.summary.scalar("Dist_x_fake", Lx_dist_fake)
+        tf.summary.scalar("Max_pixel_dist_true", max_dist_true)
+        tf.summary.scalar("Max_pixel_dist_true", max_dist_fake)
+        return Lx, (Lx_true, Lx_fake), (Lx_dist_true, Lx_dist_fake), (max_dist_true, max_dist_fake)
     
 
     @lazy_method
-    def loss_y(self, beta_l, beta_f, beta_c):
-        def loss_y_from_least(): 
-            y_least = tf.argmin(self._target_logits, axis=1, output_type=tf.int32)
-            if FLAGS.LOSS_MODE_LEAST == "ENTRO": # Minimize the distance of prediction from least prob of true data
-                label_least = tf.one_hot(y_least, FLAGS.NUM_CLASSES)
+    def loss_y(self, beta_t, beta_f, beta_c):
+        def loss_y_from_trans(): 
+            if FLAGS.LOSS_MODE_TRANS == "C&W": # Make the logits at the largest prob position of fake data larger than that at true position
+                y_faked = tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32)
+                mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
+                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+                adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
+                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
                 Ly_dist = tf.reduce_mean(
-                    tf.nn.softmax_cross_entropy_with_logits_v2(labels = label_least, logits = self._target_adv_logits)
-                    # -tf.reduce_sum(self.label_fake * tf.log(self._target_adv_prediction), 1)
+                    tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_at_y_faked), -FLAGS.KAPPA_FOR_TRANS)
                 )
-            elif FLAGS.LOSS_MODE_LEAST == "C&W": # Maximize the logits at the least prob position of true data
-                mask1 = tf.one_hot(y_least, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                mask2 = tf.one_hot(y_least, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
-                adv_logits_at_y_least = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_max_exclude_y_least = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
-                Ly_dist = tf.reduce_mean(
-                    tf.maximum(tf.subtract(adv_logits_max_exclude_y_least, adv_logits_at_y_least), -FLAGS.KAPPA_FOR_LEAST)
-                )
-            return beta_l * Ly_dist, Ly_dist
+            return beta_t * Ly_dist, Ly_dist
 
 
         def loss_y_from_fake(): 
@@ -161,20 +164,29 @@ class AAN:
                     tf.nn.softmax_cross_entropy_with_logits_v2(labels = self.label, logits = self._target_adv_logits)
                     # -tf.reduce_sum(self.label_fake * tf.log(self._target_adv_prediction), 1)
                 )
+            elif FLAGS.LOSS_MODE_CLEAN == "C&W": # Minimize the logits at clean label
+                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
+                mask1 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
+                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
+                adv_logits_max_exclude_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+                Ly_dist = tf.reduce_mean(
+                    tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_max_exclude_y_clean), -FLAGS.KAPPA_FOR_CLEAN)
+                )
             return beta_c * Ly_dist, Ly_dist
 
-        Ly_least, Ly_dist_least = loss_y_from_least()
+        Ly_trans, Ly_dist_trans = loss_y_from_trans()
         Ly_fake, Ly_dist_fake = loss_y_from_fake()
         Ly_clean, Ly_dist_clean = loss_y_from_clean()
-        Ly = Ly_least + Ly_fake + Ly_clean
+        Ly = Ly_trans + Ly_fake + Ly_clean
 
-        tf.summary.scalar("Loss_y_least", Ly_least)
-        tf.summary.scalar("Dist_y_least", Ly_dist_least)
+        tf.summary.scalar("Loss_y_trans", Ly_trans)
+        tf.summary.scalar("Dist_y_trans", Ly_dist_trans)
         tf.summary.scalar("Loss_y_fake", Ly_fake)
         tf.summary.scalar("Dist_y_fake", Ly_dist_fake)
         tf.summary.scalar("Loss_y_clean", Ly_clean)
         tf.summary.scalar("Dist_y_clean", Ly_dist_clean)
-        return Ly, (Ly_least, Ly_fake, Ly_clean), (Ly_dist_least, Ly_dist_fake, Ly_dist_clean)
+        return Ly, (Ly_trans, Ly_fake, Ly_clean), (Ly_dist_trans, Ly_dist_fake, Ly_dist_clean)
     
 
     @lazy_method

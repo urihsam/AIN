@@ -7,7 +7,7 @@ python3 ./code/run_aan.py --train --NUM_EPOCHS 200 --BATCH_SIZE 128 --EVAL_FREQU
     --BETA_X 1\
     --BETA_X_CHANGE_RATE 1.2\
     --BETA_X_CHANGE_EPOCHS 10\
-    --BETA_Y_LEAST 0\
+    --BETA_Y_TRANS 1\
     --BETA_Y_FAKE 80\
     --BETA_Y_FAKE_CHANGE_RATE 1.2\
     --BETA_Y_FAKE_CHANGE_EPOCHS 10\

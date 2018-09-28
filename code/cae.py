@@ -14,14 +14,14 @@ class CAE:
                  conv_filter_sizes=[3,3], #[[3,3], [3,3], [3,3], [3,3], [3,3]], 
                  conv_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
                  conv_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
-                 conv_channel_sizes=[128, 128, 128, 64, 64, 64, 3],
+                 conv_channel_sizes=[128, 128, 128, 64, 64, 64, 3], # [128, 128, 128, 128, 1]
                  conv_leaky_ratio=[0.4, 0.4, 0.4, 0.2, 0.2, 0.2, 0.1],
                  # deconv layers
                  decv_filter_sizes=[3,3], #[[3,3], [3,3], [3,3], [3,3], [3,3]], 
                  decv_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
                  decv_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
-                 decv_channel_sizes=[3, 64, 64, 64, 128, 128, 128],
-                 decv_leaky_ratio=[0.1, 0.2, 0.2, 0.2, 0.4, 0.4, 0.4],
+                 decv_channel_sizes=[3, 64, 64, 64, 128, 128, 128],  # [1, 128, 128, 128, 128]
+                 decv_leaky_ratio=[0.1, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1],
                  # encoder fc layers
                  enfc_state_sizes=[4096], 
                  enfc_leaky_ratio=[0.2, 0.2],
