@@ -21,7 +21,7 @@ class CAE:
                  decv_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
                  decv_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
                  decv_channel_sizes=[3, 64, 64, 64, 128, 128, 128],  # [1, 128, 128, 128, 128]
-                 decv_leaky_ratio=[0.1, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1],
+                 decv_leaky_ratio=[0.1, 0.2, 0.2, 0.2, 0.4, 0.4, 0.01],
                  # encoder fc layers
                  enfc_state_sizes=[4096], 
                  enfc_leaky_ratio=[0.2, 0.2],
