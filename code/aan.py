@@ -117,12 +117,9 @@ class AAN:
             if FLAGS.LOSS_MODE_TRANS == "C&W": # Make the logits at the largest prob position of fake data larger than that at true position
                 y_faked = tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32)
                 mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
-                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
                 adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
                 Ly_dist = tf.reduce_mean(
-                    tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_at_y_faked), -FLAGS.KAPPA_FOR_TRANS)
+                    tf.maximum(-1.0*adv_logits_at_y_faked, -FLAGS.KAPPA_FOR_TRANS)
                 )
             return beta_t * Ly_dist, Ly_dist
 
