@@ -24,7 +24,7 @@ class SCAE(CAE):
                  enfc_leaky_ratio=[0.2, 0.2],
                  enfc_drop_rate=[0, 0.75],
                  # bottleneck
-                 center_state_size=1024, 
+                 central_state_size=1024, 
                  # decoder fc layers
                  defc_state_sizes=[4096],
                  defc_leaky_ratio=[0.2, 0.2],
@@ -36,7 +36,7 @@ class SCAE(CAE):
         super().__init__(output_low_bound, output_up_bound, 
               conv_filter_size, conv_channel_sizes, conv_leaky_ratio,
               decv_filter_size, decv_channel_sizes, decv_leaky_ratio,
-              enfc_state_sizes, enfc_leaky_ratio, enfc_drop_rate, center_state_size, 
+              enfc_state_sizes, enfc_leaky_ratio, enfc_drop_rate, central_state_size, 
               defc_state_sizes, defc_leaky_ratio, defc_drop_rate, use_batch_norm
              )
 

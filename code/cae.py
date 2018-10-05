@@ -27,7 +27,7 @@ class CAE:
                  enfc_leaky_ratio=[0.2, 0.2],
                  enfc_drop_rate=[0, 0.75],
                  # bottleneck
-                 center_state_size=2048, 
+                 central_state_size=2048, 
                  # decoder fc layers
                  defc_state_sizes=[4096],
                  defc_leaky_ratio=[0.2, 0.2],
@@ -70,7 +70,7 @@ class CAE:
         self.enfc_leaky_ratio = enfc_leaky_ratio
         self.enfc_drop_rate = enfc_drop_rate
         # bottleneck
-        self.center_state_size = center_state_size
+        self.central_state_size = central_state_size
         # decoder fc layers
         self.defc_state_sizes = defc_state_sizes
         self.defc_leaky_ratio = defc_leaky_ratio
@@ -131,13 +131,13 @@ class CAE:
     @lazy_method
     def enfc_weights_biases(self):
         in_size = self.conv_out_shape[0] * self.conv_out_shape[1] * self.conv_out_shape[2]
-        state_sizes = self.enfc_state_sizes + [self.center_state_size]
+        state_sizes = self.enfc_state_sizes + [self.central_state_size]
         return self._fc_weights_biases("W_enfc", "b_enfc", in_size, state_sizes)
 
     
     @lazy_method
     def defc_weights_biases(self):
-        in_size = self.center_state_size
+        in_size = self.central_state_size
         out_size = self.decv_in_shape[0] * self.decv_in_shape[1] * self.decv_in_shape[2]
         state_sizes = self.defc_state_sizes + [out_size]
         return self._fc_weights_biases("W_defc", "b_defc", in_size, state_sizes)
@@ -267,7 +267,7 @@ class CAE:
         conv = self.conv_layers(inputs)
         assert conv.get_shape().as_list()[1:] == self.conv_out_shape
         enfc = self.enfc_layers(conv)
-        assert enfc.get_shape().as_list()[1:] == [self.center_state_size]
+        assert enfc.get_shape().as_list()[1:] == [self.central_state_size]
         return enfc
     
 

@@ -33,7 +33,9 @@ def set_flags():
     flags.DEFINE_float('REG_SCALE', 0.01, 'The scale of regularization')
     ## Gamma for rho distance
     flags.DEFINE_float("SPARSE_RHO", 10, "The sparse threshold for central states of AE")
-    flags.DEFINE_float("GAMMA", 1e-5, "Coefficient for RHO distance") # 0.01
+    flags.DEFINE_float("GAMMA_S", 1e-5, "Coefficient for RHO distance") # 0.01
+    ## Gamma for variational kl distance
+    flags.DEFINE_float("GAMMA_V", 1, "Coefficient for KL distance") # 1
     ## loss x
     flags.DEFINE_string("PARTIAL_LOSS", "FULL_LOSS", "Use loss x or loss y") # FULL_LOSS, LOSS_X, LOSS_Y
     flags.DEFINE_integer("LOSS_CHANGE_FREQUENCY", 5, "The frequency of changing loss") # 5

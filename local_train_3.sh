@@ -1,6 +1,6 @@
 #!/bin/bash
 python3 ./code/run_aan.py --train --local --NUM_EPOCHS 1 --BATCH_SIZE 128 --EVAL_FREQUENCY 1\
-    --AE_TYPE TRAD\
+    --AE_TYPE VARI\
     --EARLY_STOPPING_THRESHOLD 50\
     --BETA_X_TRUE 0.25\
     --BETA_X_FAKE 0.25\

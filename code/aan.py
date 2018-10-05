@@ -1,6 +1,7 @@
 from utils.attack_utils import fgm
 import cae
 import scae
+import vcae
 import resnet
 from utils.decorator import *
 from dependency import *
@@ -23,6 +24,11 @@ class AAN:
             if FLAGS.AE_TYPE == "SPARSE":
                 print("Using Sparse Convolutional Autoencoder")
                 self._autoencoder = scae.SCAE(output_low_bound=self.output_low_bound, 
+                                              output_up_bound=self.output_up_bound
+                                             )
+            elif FLAGS.AE_TYPE == "VARI":
+                print("Using Variational Convolutional Autoencoder")
+                self._autoencoder = vcae.VCAE(output_low_bound=self.output_low_bound, 
                                               output_up_bound=self.output_up_bound
                                              )
             else:
@@ -194,11 +200,16 @@ class AAN:
         partial_loss_func = lambda: tf.cond(tf.equal(partial_loss, "LOSS_X"), lambda: loss_x, lambda: loss_y)
         loss = tf.cond(tf.equal(partial_loss, "FULL_LOSS"), lambda: loss_x + loss_y, partial_loss_func)
         if FLAGS.AE_TYPE == "SPARSE":
-            sparse_loss = FLAGS.GAMMA * self._autoencoder.rho_distance(FLAGS.SPARSE_RHO)
+            sparse_loss = FLAGS.GAMMA_S * self._autoencoder.rho_distance(FLAGS.SPARSE_RHO)
             loss += sparse_loss
-            tf.summary.scalar("Sparse_loss", sparse_loss)
+            variational_loss = tf.constant(0)
+        elif FLAGS.AE_TYPE == "VARI":
+            variational_loss = FLAGS.GAMMA_V * self._autoencoder.kl_distance()
+            loss += variational_loss
+            sparse_loss = tf.constant(0)
         else:
             sparse_loss = tf.constant(0)
+            variational_loss = tf.constant(0)
 
         opt_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "autoencoder")
         if FLAGS.REG_SCALE is not None:
@@ -208,7 +219,9 @@ class AAN:
             loss += reg_term
             tf.summary.scalar("Regularization", reg_term)
         tf.summary.scalar("Total_loss", loss)
-        return loss, sparse_loss, reg_term
+        tf.summary.scalar("Sparse_loss", sparse_loss)
+        tf.summary.scalar("Variational_loss", variational_loss)
+        return loss, sparse_loss, variational_loss, reg_term
 
 
     @lazy_method
