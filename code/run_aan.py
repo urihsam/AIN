@@ -373,9 +373,9 @@ def train():
             # Update BETA_X_TRUE
             if FLAGS.BETA_X_TRUE >= FLAGS.MIN_BETA_X_TRUE and FLAGS.BETA_X_TRUE <= FLAGS.MAX_BETA_X_TRUE and (epoch+1) % FLAGS.BETA_X_TRUE_CHANGE_EPOCHS == 0:
                 FLAGS.BETA_X_TRUE =  FLAGS.BETA_X_TRUE * FLAGS.BETA_X_TRUE_CHANGE_RATE
-            # Update Beta_Y_FAKE
-            if FLAGS.BETA_Y_FAKE >= FLAGS.MIN_BETA_Y_FAKE and FLAGS.BETA_Y_FAKE <= FLAGS.MAX_BETA_Y_FAKE and (epoch+1) % FLAGS.BETA_Y_FAKE_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_Y_FAKE =  FLAGS.BETA_Y_FAKE * FLAGS.BETA_Y_FAKE_CHANGE_RATE
+            # Update Beta_X_FAKE
+            if FLAGS.BETA_X_FAKE >= FLAGS.MIN_BETA_X_FAKE and FLAGS.BETA_X_FAKE <= FLAGS.MAX_BETA_X_FAKE and (epoch+1) % FLAGS.BETA_X_FAKE_CHANGE_EPOCHS == 0:
+                FLAGS.BETA_X_FAKE =  FLAGS.BETA_X_FAKE * FLAGS.BETA_X_FAKE_CHANGE_RATE
             
                 
                 
