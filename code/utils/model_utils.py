@@ -35,7 +35,7 @@ def set_flags():
     flags.DEFINE_float("SPARSE_RHO", 10, "The sparse threshold for central states of AE")
     flags.DEFINE_float("GAMMA_S", 1e-5, "Coefficient for RHO distance") # 0.01
     ## Gamma for variational kl distance
-    flags.DEFINE_float("GAMMA_V", 1, "Coefficient for KL distance") # 1
+    flags.DEFINE_float("GAMMA_V", 1e-4, "Coefficient for KL distance") # 1e-3
     ## loss x
     flags.DEFINE_string("PARTIAL_LOSS", "FULL_LOSS", "Use loss x or loss y") # FULL_LOSS, LOSS_X, LOSS_Y
     flags.DEFINE_integer("LOSS_CHANGE_FREQUENCY", 5, "The frequency of changing loss") # 5
@@ -45,21 +45,21 @@ def set_flags():
     flags.DEFINE_float("MIN_LOSS_X_THRE", 50, "Minimum threshold for loss x") # 50
     flags.DEFINE_float("MAX_LOSS_X_THRE", 1500, "Maximum threshold for loss x") # 150
     ## Kappa: C&W loss
-    flags.DEFINE_float("KAPPA_FOR_TRANS", 10, "The min logits distance") # 10
-    flags.DEFINE_float("KAPPA_FOR_FAKE", 10, "The min logits distance") # 10
-    flags.DEFINE_float("KAPPA_FOR_CLEAN", 10, "The min logits distance") # 10
+    flags.DEFINE_float("KAPPA_FOR_TRANS", 6, "The min logits distance") # 6
+    flags.DEFINE_float("KAPPA_FOR_FAKE", 6, "The min logits distance") # 6
+    flags.DEFINE_float("KAPPA_FOR_CLEAN", 6, "The min logits distance") # 6
     ## Beta x true
     flags.DEFINE_float("BETA_X_TRUE", 0.1, "Coefficient for loss of X") # 1
     flags.DEFINE_float("BETA_X_TRUE_CHANGE_RATE", 1.2, "Change rate of Beta x") # 1.2
     flags.DEFINE_float("BETA_X_TRUE_CHANGE_EPOCHS", 10, "Change epochs of Beta x") # 10
     flags.DEFINE_float("MIN_BETA_X_TRUE", 0.01, "Minimum of beta x") # 0.01
-    flags.DEFINE_float("MAX_BETA_X_TRUE", 10, "Maximum of beta x") # 10
+    flags.DEFINE_float("MAX_BETA_X_TRUE", 1, "Maximum of beta x") # 1
     ## Beta x fake
     flags.DEFINE_float("BETA_X_FAKE", 0.1, "Coefficient for loss of X") # 1
     flags.DEFINE_float("BETA_X_FAKE_CHANGE_RATE", 1.2, "Change rate of Beta x") # 1.2
     flags.DEFINE_float("BETA_X_FAKE_CHANGE_EPOCHS", 10, "Change epochs of Beta x") # 10
     flags.DEFINE_float("MIN_BETA_X_FAKE", 0.01, "Minimum of beta x") # 0.01
-    flags.DEFINE_float("MAX_BETA_X_FAKE", 10, "Maximum of beta x") # 10
+    flags.DEFINE_float("MAX_BETA_X_FAKE", 1, "Maximum of beta x") # 1
     ## Beta y TRANS
     flags.DEFINE_float("BETA_Y_TRANS", 1, "Coefficient for loss of Y TRANS") # 5
     flags.DEFINE_float("BETA_Y_TRANS_CHANGE_RATE", 1, "Change rate of Beta Y TRANS") # 1

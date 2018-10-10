@@ -121,8 +121,9 @@ class AAN:
                 mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
                 adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
                 adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
-                Ly_dist = tf.reduce_mean(
-                    tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_at_y_faked), -FLAGS.KAPPA_FOR_TRANS)
+                Ly_dist = tf.maximum(
+                    tf.reduce_mean(tf.subtract(adv_logits_at_y_clean, adv_logits_at_y_faked)), 
+                    -FLAGS.KAPPA_FOR_TRANS
                 )
             return beta_t * Ly_dist, Ly_dist
 
@@ -149,8 +150,9 @@ class AAN:
                 mask2 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
                 adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
                 adv_logits_max_exclude_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
-                Ly_dist = tf.reduce_mean(
-                    tf.maximum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), -FLAGS.KAPPA_FOR_FAKE)
+                Ly_dist = tf.maximum(
+                    tf.reduce_mean(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked)), 
+                    -FLAGS.KAPPA_FOR_FAKE
                 )
             return beta_f * Ly_dist, Ly_dist
         
@@ -176,9 +178,11 @@ class AAN:
                 mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
                 adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
                 adv_logits_max_exclude_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
-                Ly_dist = tf.reduce_mean(
-                    tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_max_exclude_y_clean), -FLAGS.KAPPA_FOR_CLEAN)
+                Ly_dist = tf.maximum(
+                    tf.reduce_mean(tf.subtract(adv_logits_at_y_clean, adv_logits_max_exclude_y_clean)),
+                    -FLAGS.KAPPA_FOR_CLEAN
                 )
+                
             return beta_c * Ly_dist, Ly_dist
 
         Ly_trans, Ly_dist_trans = loss_y_from_trans()

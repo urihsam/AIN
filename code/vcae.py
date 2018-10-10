@@ -22,17 +22,17 @@ class VCAE(CAE):
                  decv_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
                  decv_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
                  decv_channel_sizes=[3, 64, 64, 64, 128, 128, 128],  # [1, 128, 128, 128, 128]
-                 decv_leaky_ratio=[0.1, 0.2, 0.2, 0.2, 0.4, 0.4, 0],
+                 decv_leaky_ratio=[0.1, 0.2, 0.2, 0.2, 0.4, 0.4, 0.01],
                  # encoder fc layers
                  enfc_state_sizes=[4096], 
-                 enfc_leaky_ratio=[0.2, 0],
-                 enfc_drop_rate=[0, 0],
+                 enfc_leaky_ratio=[0.2, 0.2],
+                 enfc_drop_rate=[0, 0.75],
                  # bottleneck
                  central_state_size=2048, 
                  # decoder fc layers
                  defc_state_sizes=[4096],
-                 defc_leaky_ratio=[0, 0.2],
-                 defc_drop_rate=[0, 0],
+                 defc_leaky_ratio=[0.2, 0.2],
+                 defc_drop_rate=[0.75, 0],
                  # switch
                  use_batch_norm = False
                 ):
@@ -108,12 +108,12 @@ class VCAE(CAE):
             net = _func(net, layer_id)
         # Last layer
         net_mu = _func(net, self.num_enfc-1, "_mu")
-        ## Set low and up bounds for log_sigma
-        net_log_sigma = tf.minimum(tf.maximum(-10.0, _func(net, self.num_enfc-1, "_log_sigma_sq")), 5.0)
+        ## Set low and up bounds for log_sigma_sq
+        net_log_sigma_sq = tf.minimum(tf.maximum(-10.0, _func(net, self.num_enfc-1, "_log_sigma_sq")), 5.0)
 
         net_mu = tf.identity(net_mu, name="output_mu")
-        net_log_sigma = tf.identity(net_log_sigma, name="output_log_sigma")
-        return net_mu, net_log_sigma
+        net_log_sigma_sq = tf.identity(net_log_sigma_sq, name="output_log_sigma_sq")
+        return net_mu, net_log_sigma_sq
     
 
     @lazy_method
@@ -144,20 +144,20 @@ class VCAE(CAE):
     def encoder(self, inputs):
         conv = self.conv_layers(inputs)
         assert conv.get_shape().as_list()[1:] == self.conv_out_shape
-        self.central_mu, self.central_log_sigma = self.enfc_layers(conv)
+        self.central_mu, self.central_log_sigma_sq = self.enfc_layers(conv)
         assert self.central_mu.get_shape().as_list()[1:] == [self.central_state_size]
-        assert self.central_log_sigma.get_shape().as_list()[1:] == [self.central_state_size]
+        assert self.central_log_sigma_sq.get_shape().as_list()[1:] == [self.central_state_size]
         # epsilon
         eps = tf.random_normal(tf.shape(self.central_mu), 0, 1, dtype=tf.float32)
         # z = mu + sigma*epsilon
-        enfc = tf.add(self.central_mu, tf.multiply(tf.exp(self.central_log_sigma), eps))
+        enfc = tf.add(self.central_mu, tf.multiply(tf.sqrt(tf.exp(self.central_log_sigma_sq)), eps))
         return enfc
 
     
     @lazy_method
     def kl_distance(self):
         loss = -0.5 * tf.reduce_mean(
-            tf.reduce_mean(1 + 2 * self.central_log_sigma - tf.square(self.central_mu) - tf.exp(2 * self.central_log_sigma), 1)
+            tf.reduce_sum(1 + self.central_log_sigma_sq - tf.square(self.central_mu) - tf.exp(self.central_log_sigma_sq), 1)
             )
         return loss
 
