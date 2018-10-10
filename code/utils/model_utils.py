@@ -23,7 +23,9 @@ def set_flags():
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
     # AE type
-    flags.DEFINE_string("AE_TYPE", "TRAD", "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL)
+    flags.DEFINE_string("AE_TYPE", "TRAD", "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
+    flags.DEFINE_bool("SPARSE", False, "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
+    flags.DEFINE_bool("VARI", False, "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
     # Loss params
     flags.DEFINE_string("LOSS_MODE_TRANS", "C&W", "How to calculate loss from fake imgae") # ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C&W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C&W

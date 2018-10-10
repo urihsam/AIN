@@ -32,6 +32,8 @@ class CAE:
                  defc_state_sizes=[4096],
                  defc_leaky_ratio=[0.2, 0.2],
                  defc_drop_rate=[0.75, 0],
+                 # img channel
+                 img_channel=None,
                  # switch
                  use_batch_norm = False
                 ):
@@ -75,9 +77,14 @@ class CAE:
         self.defc_state_sizes = defc_state_sizes
         self.defc_leaky_ratio = defc_leaky_ratio
         self.defc_drop_rate = defc_drop_rate
-         # relu bounds
+        # relu bounds
         self.output_low_bound = output_low_bound
         self.output_up_bound = output_up_bound
+        # img channel
+        if img_channel == None:
+            self.img_channel = FLAGS.NUM_CHANNELS
+        else:
+            self.img_channel = img_channel
         # switch
         self.use_batch_norm = use_batch_norm
 
@@ -93,13 +100,13 @@ class CAE:
 
     @lazy_method
     def conv_weights_biases(self):
-        return self._conv_weights_biases("W_conv", "b_conv", self.conv_filter_sizes, FLAGS.NUM_CHANNELS, self.conv_channel_sizes)
+        return self._conv_weights_biases("W_conv", "b_conv", self.conv_filter_sizes, self.img_channel, self.conv_channel_sizes)
 
 
     @lazy_method
     def decv_weights_biases(self):
         in_channel = self.decv_channel_sizes[0]
-        channel_sizes = self.decv_channel_sizes[1:] + [FLAGS.NUM_CHANNELS]
+        channel_sizes = self.decv_channel_sizes[1:] + [self.img_channel]
         return self._conv_weights_biases("W_decv", "b_decv", self.decv_filter_sizes, in_channel, channel_sizes, True)
     
 
@@ -167,7 +174,7 @@ class CAE:
     
     @lazy_method
     def conv_layers(self, inputs, W_name="W_conv", b_name="b_conv"):
-        net = tf.reshape(inputs, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
+        net = tf.reshape(inputs, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel])
         for layer_id in range(self.num_conv):
             filter_name = "{}{}".format(W_name, layer_id)
             bias_name = "{}{}".format(b_name, layer_id)
@@ -257,7 +264,7 @@ class CAE:
                 net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])
                 #net = ne.elu(net)
         net = tf.identity(net, name='output')
-        net = tf.reshape(net, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
+        net = tf.reshape(net, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel])
         #import pdb; pdb.set_trace()
         return net
 
@@ -276,7 +283,7 @@ class CAE:
         defc = self.defc_layers(inputs)
         assert defc.get_shape().as_list()[1:] == self.decv_in_shape
         generated = self.decv_layers(defc)
-        assert generated.get_shape().as_list()[1:] == [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS]
+        assert generated.get_shape().as_list()[1:] == [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel]
         return generated
 
 

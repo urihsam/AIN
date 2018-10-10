@@ -33,6 +33,8 @@ class VCAE(CAE):
                  defc_state_sizes=[4096],
                  defc_leaky_ratio=[0.2, 0.2],
                  defc_drop_rate=[0.75, 0],
+                 # img channel
+                 img_channel=None,
                  # switch
                  use_batch_norm = False
                 ):
@@ -41,7 +43,8 @@ class VCAE(CAE):
               conv_filter_sizes, conv_strides, conv_padding, conv_channel_sizes, conv_leaky_ratio,
               decv_filter_sizes, decv_strides, decv_padding, decv_channel_sizes, decv_leaky_ratio,
               enfc_state_sizes, enfc_leaky_ratio, enfc_drop_rate, central_state_size, 
-              defc_state_sizes, defc_leaky_ratio, defc_drop_rate, use_batch_norm
+              defc_state_sizes, defc_leaky_ratio, defc_drop_rate, 
+              img_channel, use_batch_norm
              )
 
     
