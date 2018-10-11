@@ -40,7 +40,7 @@ class AAN:
                                             output_up_bound=self.output_up_bound
                                            )
             elif FLAGS.AE_TYPE == "ATTEN":
-                print("Using Convolutional Autoencoder")
+                print("Using Channel-attentive Variational Convolutional Autoencoder")
                 FLAGS.VARI = True
                 self._autoencoder = cavcae.CAVCAE(output_low_bound=self.output_low_bound, 
                                                   output_up_bound=self.output_up_bound

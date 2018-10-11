@@ -1,5 +1,5 @@
 #!/bin/bash
-python3 ./code/run_aan.py --train --local --NUM_EPOCHS 1 --BATCH_SIZE 32 --EVAL_FREQUENCY 1\
+python3 ./code/run_aan.py --train --local --NUM_EPOCHS 1 --BATCH_SIZE 64 --EVAL_FREQUENCY 1\
     --AE_TYPE ATTEN\
     --GAMMA_V 1e-4\
     --EARLY_STOPPING_THRESHOLD 20\

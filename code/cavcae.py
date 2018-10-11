@@ -78,10 +78,10 @@ class CAVCAE:
                 gen_splits.append(gen)
                 sum_splits.append(tf.reduce_sum(gen))
             generated = tf.stack(gen_splits, 3)
-            sums = tf.stack(sum_splits)
-            self.attention = sums / tf.reduce_sum(sums)
-            attentive = tf.multiply(generated, self.attention)
-            #attentive = generated
+            #sums = tf.stack(sum_splits)
+            #self.attention = sums / tf.reduce_sum(sums)
+            #attentive = tf.multiply(generated, self.attention)
+            attentive = generated
 
         return attentive
 
@@ -91,9 +91,9 @@ class CAVCAE:
         dists = []
         for m_idx in range(self.img_channel):
             dists.append(self._model[m_idx].kl_distance())
-        loss = tf.multiply(tf.stack(dists), self.attention)
-        #loss = tf.stack(dists)
-        return tf.reduce_sum(loss)
+        #loss = tf.multiply(tf.stack(dists), self.attention)
+        loss = tf.stack(dists)
+        return tf.reduce_mean(loss)
     
 
     def tf_load(self, sess, path, name='deep_cavcae.ckpt', spec=""):
