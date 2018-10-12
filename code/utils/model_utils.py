@@ -21,6 +21,8 @@ def set_flags():
     flags.DEFINE_integer("NUM_EPOCHS", 1, "Number of epochs") # 200
     flags.DEFINE_integer("BATCH_SIZE", 128, "Size of training batches")# 128
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
+    flags.DEFINE_bool("load_AE", False, "Load AE from the last training result or not")
+    flags.DEFINE_bool("early_stopping", False, "Use early stopping or not")
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
     # AE type
     flags.DEFINE_string("AE_TYPE", "TRAD", "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
@@ -47,9 +49,13 @@ def set_flags():
     flags.DEFINE_float("MIN_LOSS_X_THRE", 50, "Minimum threshold for loss x") # 50
     flags.DEFINE_float("MAX_LOSS_X_THRE", 1500, "Maximum threshold for loss x") # 150
     ## Kappa: C&W loss
+    flags.DEFINE_integer("MODIFY_KAPPA_THRESHOLD", 5, "Modify beta y threshold")
     flags.DEFINE_float("KAPPA_FOR_TRANS", 6, "The min logits distance") # 6
+    flags.DEFINE_float("KAPPA_TRANS_CHANGE_RATE", 1.2, "The change rate of KAPPA TRANS")
     flags.DEFINE_float("KAPPA_FOR_FAKE", 6, "The min logits distance") # 6
+    flags.DEFINE_float("KAPPA_FAKE_CHANGE_RATE", 1.2, "The change rate of KAPPA FAKE")
     flags.DEFINE_float("KAPPA_FOR_CLEAN", 6, "The min logits distance") # 6
+    flags.DEFINE_float("KAPPA_CLEAN_CHANGE_RATE", 1.2, "The change rate of KAPPA CLEAN")
     ## Beta x true
     flags.DEFINE_float("BETA_X_TRUE", 0.1, "Coefficient for loss of X") # 1
     flags.DEFINE_float("BETA_X_TRUE_CHANGE_RATE", 1.2, "Change rate of Beta x") # 1.2
@@ -61,7 +67,7 @@ def set_flags():
     flags.DEFINE_float("BETA_X_FAKE_CHANGE_RATE", 1.2, "Change rate of Beta x") # 1.2
     flags.DEFINE_float("BETA_X_FAKE_CHANGE_EPOCHS", 10, "Change epochs of Beta x") # 10
     flags.DEFINE_float("MIN_BETA_X_FAKE", 0.01, "Minimum of beta x") # 0.01
-    flags.DEFINE_float("MAX_BETA_X_FAKE", 1, "Maximum of beta x") # 1
+    flags.DEFINE_float("MAX_BETA_X_FAKE", 1, "Maximum of beta x") # 1    
     ## Beta y TRANS
     flags.DEFINE_float("BETA_Y_TRANS", 1, "Coefficient for loss of Y TRANS") # 5
     flags.DEFINE_float("BETA_Y_TRANS_CHANGE_RATE", 1, "Change rate of Beta Y TRANS") # 1

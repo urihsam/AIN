@@ -133,6 +133,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     print("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
         Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
     res_dict = {"acc": acc, 
+                "fake_acc": fake_acc,
                 "adv_acc": adv_acc, 
                 "loss": loss, 
                 "sparse_loss": sparse_loss,
@@ -283,6 +284,9 @@ def train():
         sess.run(tf.global_variables_initializer())
         # Load target classifier
         model._target.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
+        if FLAGS.load_AE:
+            print("Autoencoder loaded.")
+            model._autoencoder.tf_load(sess, FLAGS.AE_PATH)
         # For tensorboard
         train_writer = model_utils.init_writer(FLAGS.TRAIN_LOG_PATH, g)
         valid_writer = model_utils.init_writer(FLAGS.VALID_LOG_PATH, g)
@@ -295,7 +299,7 @@ def train():
             total_valid_batch = None
         
         min_adv_acc = np.Inf
-        estop_count = 0
+        alert_count = 0
         
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
@@ -364,12 +368,6 @@ def train():
                 #Update loss x threshold
                 if FLAGS.LOSS_X_THRESHOLD >= FLAGS.MIN_LOSS_X_THRE and FLAGS.LOSS_X_THRESHOLD <= FLAGS.MAX_LOSS_X_THRE and (epoch+1) % FLAGS.LOSS_X_THRE_CHANGE_EPOCHS == 0:
                     FLAGS.LOSS_X_THRESHOLD = FLAGS.LOSS_X_THRESHOLD * FLAGS.LOSS_X_THRE_CHANGE_RATE
-            # Update bound
-            if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
-                FLAGS.PIXEL_BOUND =  FLAGS.PIXEL_BOUND * FLAGS.BOUND_CHANGE_RATE
-            """# Update epsilon
-            if FLAGS.EPSILON >= FLAGS.MIN_EPSILON and FLAGS.EPSILON <= FLAGS.MAX_EPSILON and (epoch+1) % FLAGS.EPSILON_CHANGE_EPOCHS == 0:
-                FLAGS.EPSILON =  FLAGS.EPSILON * FLAGS.EPSILON_CHANGE_RATE"""
             # Update BETA_X_TRUE
             if FLAGS.BETA_X_TRUE >= FLAGS.MIN_BETA_X_TRUE and FLAGS.BETA_X_TRUE <= FLAGS.MAX_BETA_X_TRUE and (epoch+1) % FLAGS.BETA_X_TRUE_CHANGE_EPOCHS == 0:
                 FLAGS.BETA_X_TRUE =  FLAGS.BETA_X_TRUE * FLAGS.BETA_X_TRUE_CHANGE_RATE
@@ -382,19 +380,32 @@ def train():
             end_time = time.time()
             print('Eopch {} completed with time {:.2f} s'.format(epoch+1, end_time-start_time))
             # validation
-            print("\n**********************")
+            print("\n******************************************************************")
             print("Validation")
             valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=total_valid_batch, valid=True)
-            # early stopping
+
+            if valid_dict["max_dist_true"] < FLAGS.PIXEL_BOUND:
+                FLAGS.PIXEL_BOUND = FLAGS.BOUND_CHANGE_RATE * FLAGS.PIXEL_BOUND
+                print("Pixel bound was changed to: {}".format(FLAGS.PIXEL_BOUND))
+            
             if valid_dict["adv_acc"] < min_adv_acc:
                 min_adv_acc = valid_dict["adv_acc"]
-                estop_count = 0
+                alert_count = 0
             else:
-                estop_count += 1
-            if estop_count >= FLAGS.EARLY_STOPPING_THRESHOLD:
-                print("Early Stopped.")
-                break
-                
+                alert_count += 1
+            # early stopping
+            if FLAGS.early_stopping:
+                if alert_count >= FLAGS.EARLY_STOPPING_THRESHOLD:
+                    print("Early Stopped.")
+                    break
+            if alert_count >= FLAGS.MODIFY_KAPPA_THRESHOLD and valid_dict["adv_acc"] >= 2.0 * valid_dict["fake_acc"]:
+                alert_count = 0
+                FLAGS.KAPPA_FOR_TRANS = FLAGS.KAPPA_TRANS_CHANGE_RATE * FLAGS.KAPPA_FOR_TRANS
+                FLAGS.KAPPA_FOR_CLEAN = FLAGS.KAPPA_CLEAN_CHANGE_RATE * FLAGS.KAPPA_FOR_CLEAN
+                print("Kappa trans was changed to {:.4f}".format(FLAGS.KAPPA_FOR_TRANS))
+                print("Kappa clean was changed to {:.4f}".format(FLAGS.KAPPA_FOR_CLEAN))
+            
+            print("******************************************************************")
             print()
             print()
         print("Optimization Finished!")
