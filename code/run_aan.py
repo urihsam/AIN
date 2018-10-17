@@ -25,7 +25,9 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake), \
             (model_max_dist_true, model_max_dist_fake) = model.loss_x(graph_dict["beta_x_t_holder"], graph_dict["beta_x_f_holder"])
     model_loss_y, (model_ly_trans, model_ly_fake, model_ly_clean), (model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean) =\
-        model.loss_y(graph_dict["beta_y_t_holder"], graph_dict["beta_y_f_holder"], graph_dict["beta_y_c_holder"])
+        model.loss_y(graph_dict["beta_y_t_holder"], graph_dict["beta_y_f_holder"], graph_dict["beta_y_c_holder"],
+                     graph_dict["kappa_t_holder"], graph_dict["kappa_f_holder"], graph_dict["kappa_c_holder"]
+                    )
     model_loss, model_sparse_loss, model_var_loss, model_reg = model.loss(graph_dict["partial_loss_holder"], model_loss_x, model_loss_y)
     fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, 
             model_loss, model_sparse_loss, model_var_loss, model_reg, 
@@ -65,6 +67,9 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             graph_dict["beta_y_t_holder"]: FLAGS.BETA_Y_TRANS,
             graph_dict["beta_y_f_holder"]: FLAGS.BETA_Y_FAKE,
             graph_dict["beta_y_c_holder"]: FLAGS.BETA_Y_CLEAN,
+            graph_dict["kappa_t_holder"]: FLAGS.KAPPA_FOR_TRANS,
+            graph_dict["kappa_f_holder"]: FLAGS.KAPPA_FOR_FAKE,
+            graph_dict["kappa_c_holder"]: FLAGS.KAPPA_FOR_CLEAN,
             graph_dict["partial_loss_holder"]: FLAGS.PARTIAL_LOSS,
             graph_dict["is_training"]: False
         }
@@ -175,6 +180,9 @@ def test():
         beta_y_t_holder = tf.placeholder(tf.float32, ())
         beta_y_f_holder = tf.placeholder(tf.float32, ())
         beta_y_c_holder = tf.placeholder(tf.float32, ())
+        kappa_t_holder = tf.placeholder(tf.float32, ())
+        kappa_f_holder = tf.placeholder(tf.float32, ())
+        kappa_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.bool, ())
         is_training = tf.placeholder(tf.bool, ())
 
@@ -192,6 +200,9 @@ def test():
         graph_dict["beta_y_t_holder"] = beta_y_t_holder
         graph_dict["beta_y_f_holder"] = beta_y_f_holder
         graph_dict["beta_y_c_holder"] = beta_y_c_holder
+        graph_dict["kappa_t_holder"] = kappa_t_holder
+        graph_dict["kappa_f_holder"] = kappa_f_holder
+        graph_dict["kappa_c_holder"] = kappa_c_holder
         graph_dict["partial_loss_holder"] = partial_loss_holder
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
@@ -253,6 +264,9 @@ def train():
         beta_y_t_holder = tf.placeholder(tf.float32, ())
         beta_y_f_holder = tf.placeholder(tf.float32, ())
         beta_y_c_holder = tf.placeholder(tf.float32, ())
+        kappa_t_holder = tf.placeholder(tf.float32, ())
+        kappa_f_holder = tf.placeholder(tf.float32, ())
+        kappa_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
         # model
@@ -260,7 +274,9 @@ def train():
         model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake), \
             (model_max_dist_true, model_max_dist_fake) = model.loss_x(beta_x_t_holder, beta_x_f_holder)
         model_loss_y, (model_ly_trans, model_ly_fake, model_ly_clean), (model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean) =\
-            model.loss_y(beta_y_t_holder, beta_y_f_holder, beta_y_c_holder)
+            model.loss_y(beta_y_t_holder, beta_y_f_holder, beta_y_c_holder,
+                         kappa_t_holder, kappa_f_holder, kappa_c_holder
+                        )
         model_loss, model_sparse_loss, model_var_loss, model_reg = model.loss(partial_loss_holder, model_loss_x, model_loss_y)
         model_optimization = model.optimization(model_loss)
         merged_summary = tf.summary.merge_all()
@@ -276,6 +292,9 @@ def train():
         graph_dict["beta_y_t_holder"] = beta_y_t_holder
         graph_dict["beta_y_f_holder"] = beta_y_f_holder
         graph_dict["beta_y_c_holder"] = beta_y_c_holder
+        graph_dict["kappa_t_holder"] = kappa_t_holder
+        graph_dict["kappa_f_holder"] = kappa_f_holder
+        graph_dict["kappa_c_holder"] = kappa_c_holder
         graph_dict["partial_loss_holder"] = partial_loss_holder
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
@@ -316,6 +335,9 @@ def train():
                     beta_y_t_holder: FLAGS.BETA_Y_TRANS,
                     beta_y_f_holder: FLAGS.BETA_Y_FAKE,
                     beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
+                    kappa_t_holder: FLAGS.KAPPA_FOR_TRANS,
+                    kappa_f_holder: FLAGS.KAPPA_FOR_FAKE,
+                    kappa_c_holder: FLAGS.KAPPA_FOR_CLEAN,
                     is_training: True,
                     partial_loss_holder: FLAGS.PARTIAL_LOSS
                 }
@@ -368,6 +390,9 @@ def train():
                 #Update loss x threshold
                 if FLAGS.LOSS_X_THRESHOLD >= FLAGS.MIN_LOSS_X_THRE and FLAGS.LOSS_X_THRESHOLD <= FLAGS.MAX_LOSS_X_THRE and (epoch+1) % FLAGS.LOSS_X_THRE_CHANGE_EPOCHS == 0:
                     FLAGS.LOSS_X_THRESHOLD = FLAGS.LOSS_X_THRESHOLD * FLAGS.LOSS_X_THRE_CHANGE_RATE
+            # Update Pixel bound
+            if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
+                FLAGS.PIXEL_BOUND = FLAGS.PIXEL_BOUND * FLAGS.BOUND_CHANGE_RATE
             # Update BETA_X_TRUE
             if FLAGS.BETA_X_TRUE >= FLAGS.MIN_BETA_X_TRUE and FLAGS.BETA_X_TRUE <= FLAGS.MAX_BETA_X_TRUE and (epoch+1) % FLAGS.BETA_X_TRUE_CHANGE_EPOCHS == 0:
                 FLAGS.BETA_X_TRUE =  FLAGS.BETA_X_TRUE * FLAGS.BETA_X_TRUE_CHANGE_RATE
@@ -383,10 +408,6 @@ def train():
             print("\n******************************************************************")
             print("Validation")
             valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=total_valid_batch, valid=True)
-
-            if valid_dict["max_dist_true"] < FLAGS.PIXEL_BOUND:
-                FLAGS.PIXEL_BOUND = FLAGS.BOUND_CHANGE_RATE * FLAGS.PIXEL_BOUND
-                print("Pixel bound was changed to: {}".format(FLAGS.PIXEL_BOUND))
             
             if valid_dict["adv_acc"] < min_adv_acc:
                 min_adv_acc = valid_dict["adv_acc"]
@@ -399,6 +420,8 @@ def train():
                     print("Early Stopped.")
                     break
             if alert_count >= FLAGS.MODIFY_KAPPA_THRESHOLD and valid_dict["adv_acc"] >= 2.0 * valid_dict["fake_acc"]:
+                # reset
+                min_adv_acc = np.Inf
                 alert_count = 0
                 FLAGS.KAPPA_FOR_TRANS = FLAGS.KAPPA_TRANS_CHANGE_RATE * FLAGS.KAPPA_FOR_TRANS
                 FLAGS.KAPPA_FOR_CLEAN = FLAGS.KAPPA_CLEAN_CHANGE_RATE * FLAGS.KAPPA_FOR_CLEAN

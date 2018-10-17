@@ -50,11 +50,11 @@ def set_flags():
     flags.DEFINE_float("MAX_LOSS_X_THRE", 1500, "Maximum threshold for loss x") # 150
     ## Kappa: C&W loss
     flags.DEFINE_integer("MODIFY_KAPPA_THRESHOLD", 5, "Modify beta y threshold")
-    flags.DEFINE_float("KAPPA_FOR_TRANS", 6, "The min logits distance") # 6
+    flags.DEFINE_float("KAPPA_FOR_TRANS", 8, "The min logits distance") # 8
     flags.DEFINE_float("KAPPA_TRANS_CHANGE_RATE", 1.2, "The change rate of KAPPA TRANS")
-    flags.DEFINE_float("KAPPA_FOR_FAKE", 6, "The min logits distance") # 6
+    flags.DEFINE_float("KAPPA_FOR_FAKE", 8, "The min logits distance") # 8
     flags.DEFINE_float("KAPPA_FAKE_CHANGE_RATE", 1.2, "The change rate of KAPPA FAKE")
-    flags.DEFINE_float("KAPPA_FOR_CLEAN", 6, "The min logits distance") # 6
+    flags.DEFINE_float("KAPPA_FOR_CLEAN", 8, "The min logits distance") # 8
     flags.DEFINE_float("KAPPA_CLEAN_CHANGE_RATE", 1.2, "The change rate of KAPPA CLEAN")
     ## Beta x true
     flags.DEFINE_float("BETA_X_TRUE", 0.1, "Coefficient for loss of X") # 1
