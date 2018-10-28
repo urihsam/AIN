@@ -7,10 +7,12 @@ from utils.decorator import lazy_method, lazy_property, lazy_method_no_scope
 
 
 class VCAE(CAE):
-    def __init__(self,
-                 # relu bounds
-                 output_low_bound,
+    def __init__(self, 
+                 output_low_bound, 
                  output_up_bound,
+                 # relu bounds
+                 nonlinear_low_bound,
+                 nonlinear_up_bound,
                  # conv layers
                  conv_filter_sizes=[3,3], #[[3,3], [3,3], [3,3], [3,3], [3,3]], 
                  conv_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
@@ -39,7 +41,7 @@ class VCAE(CAE):
                  use_batch_norm = False
                 ):
         
-        super().__init__(output_low_bound, output_up_bound, 
+        super().__init__(output_low_bound, output_up_bound, nonlinear_low_bound, nonlinear_up_bound,
               conv_filter_sizes, conv_strides, conv_padding, conv_channel_sizes, conv_leaky_ratio,
               decv_filter_sizes, decv_strides, decv_padding, decv_channel_sizes, decv_leaky_ratio,
               enfc_state_sizes, enfc_leaky_ratio, enfc_drop_rate, central_state_size, 

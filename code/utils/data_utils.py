@@ -25,7 +25,7 @@ class dataset(object):
     
     """
     def __init__(self, data_dir, image_dir="images", split_ratio=0.5, 
-                 onehot=True, normalize=True):
+                 onehot=True, normalize=True, biased=True):
         print("Dataset here")
         self.data_dir = data_dir
         self.train_dir = self.path("train")
@@ -35,6 +35,7 @@ class dataset(object):
         # and class names; otherwise, the dataset store data directly
         self.onehot = onehot
         self.normalize = normalize
+        self.biased = biased
         # Load the names of all classes
         self._class_names = self._get_class_names_from_wnids()
         # Build an encoding dictionary to map from class names to integer label
@@ -112,7 +113,7 @@ class dataset(object):
         return test_img_names_classes_list[: valid_size], test_img_names_classes_list[valid_size: ]
     
     # Load images using the list of tuple in format (image file path, image class name)
-    def _load_image(self, img_name_class, onehot, normalize):
+    def _load_image(self, img_name_class, onehot, normalize, biased):
         file_path, class_name = img_name_class
         path = os.path.join(file_path)
         im = Image.open(path)
@@ -126,7 +127,10 @@ class dataset(object):
         # print(image.shape, file_path)
         if normalize:
             # Images for inception classifier are normalized to be in [-1, 1] interval.
-            image = image / 255.0 * 2.0 - 1.0
+            image = image / 255.0 
+            if biased:
+                image = image * 2.0 - 1.0
+
         # labels
         label = self._encoding_dict[class_name]
         #print(file_path, class_name, label)
@@ -173,7 +177,7 @@ class dataset(object):
             if self._train_batch_idx >= self.train_size:
                 self.train_shuffle()
             img_name_class = self._train_image_names_classes[self._train_batch_idx]
-            res = self._load_image(img_name_class, self.onehot, self.normalize)
+            res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
             if res is not None:
                 images[idx, :, :, :] = res[0]
                 labels[idx, :] = res[1]
@@ -193,7 +197,7 @@ class dataset(object):
             if self._valid_batch_idx >= self.valid_size:
                 self.valid_shuffle()
             img_name_class = self._valid_image_names_classes[self._valid_batch_idx]
-            res = self._load_image(img_name_class, self.onehot, self.normalize)
+            res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
             if res is not None:
                 images[idx, :, :, :] = res[0]
                 labels[idx, :] = res[1]
@@ -213,7 +217,7 @@ class dataset(object):
             if self._test_batch_idx >= self.test_size:
                 self.test_shuffle()
             img_name_class = self._test_image_names_classes[self._test_batch_idx]
-            res = self._load_image(img_name_class, self.onehot, self.normalize)
+            res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
             if res is not None:
                 images[idx, :, :, :] = res[0]
                 labels[idx, :] = res[1]

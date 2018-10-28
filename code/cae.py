@@ -7,9 +7,11 @@ from utils.decorator import lazy_method, lazy_method_no_scope
 
 class CAE:
     def __init__(self, 
-                 # relu bounds
                  output_low_bound, 
                  output_up_bound,
+                 # relu bounds
+                 nonlinear_low_bound,
+                 nonlinear_up_bound,
                  # conv layers
                  conv_filter_sizes=[3,3], #[[3,3], [3,3], [3,3], [3,3], [3,3]], 
                  conv_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
@@ -37,6 +39,11 @@ class CAE:
                  # switch
                  use_batch_norm = False
                 ):
+        self.output_low_bound = output_low_bound
+        self.output_up_bound = output_up_bound
+        # relu bounds
+        self.nonlinear_low_bound = nonlinear_low_bound
+        self.nonlinear_up_bound = nonlinear_up_bound
         # conv layers
         if isinstance(conv_filter_sizes[0], list):
             self.conv_filter_sizes = conv_filter_sizes
@@ -77,9 +84,6 @@ class CAE:
         self.defc_state_sizes = defc_state_sizes
         self.defc_leaky_ratio = defc_leaky_ratio
         self.defc_drop_rate = defc_drop_rate
-        # relu bounds
-        self.output_low_bound = output_low_bound
-        self.output_up_bound = output_up_bound
         # img channel
         if img_channel == None:
             self.img_channel = FLAGS.NUM_CHANNELS
@@ -257,12 +261,13 @@ class CAE:
             if self.use_batch_norm:
                 net = ne.batch_norm(net, self.is_training)
             if layer_id == self.num_decv-1: # last layer
-                net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.output_low_bound, self.output_up_bound) # Nonlinear act
+                net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.nonlinear_low_bound, self.nonlinear_up_bound) # Nonlinear act
                 #net = tf.tanh(net)
             else:
                 #net = ne.leaky_brelu(net, self.decv_leaky_ratio[layer_id], self.output_low_bound, self.output_up_bound) # Nonlinear act
                 net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])
                 #net = ne.elu(net)
+        net = ne.brelu(net, self.output_low_bound, self.output_up_bound) # clipping the final result 
         net = tf.identity(net, name='output')
         net = tf.reshape(net, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel])
         #import pdb; pdb.set_trace()

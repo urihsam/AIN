@@ -30,7 +30,7 @@ class resnet18:
         The structure of the network.
         """
         inputs = tf.reshape(self.inputs, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
-        #inputs = (inputs + 1.0) / 2.0 * 255.0
+        inputs = inputs * 255.0
 
         _R_MEAN = 123.68
         _G_MEAN = 116.78

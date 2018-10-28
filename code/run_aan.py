@@ -9,7 +9,7 @@ from utils.data_utils import dataset
 
 model_utils.set_flags()
 
-data = dataset(FLAGS.DATA_DIR, normalize=False)
+data = dataset(FLAGS.DATA_DIR, normalize=True, biased=False)
 
 
 def main(arvg=None):
@@ -183,7 +183,7 @@ def test():
         kappa_t_holder = tf.placeholder(tf.float32, ())
         kappa_f_holder = tf.placeholder(tf.float32, ())
         kappa_c_holder = tf.placeholder(tf.float32, ())
-        partial_loss_holder = tf.placeholder(tf.bool, ())
+        partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
         model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)

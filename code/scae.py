@@ -8,9 +8,11 @@ from utils.decorator import lazy_method, lazy_property, lazy_method_no_scope
 
 class SCAE(CAE):
     def __init__(self, 
-                 # relu bounds
                  output_low_bound, 
                  output_up_bound,
+                 # relu bounds
+                 nonlinear_low_bound,
+                 nonlinear_up_bound,
                  # conv layers
                  conv_filter_size=[3,3], 
                  conv_channel_sizes=[128, 128, 128, 128, 1], #[256, 256, 256, 1]
@@ -33,7 +35,7 @@ class SCAE(CAE):
                  use_batch_norm = False
                 ):
         
-        super().__init__(output_low_bound, output_up_bound, 
+        super().__init__(output_low_bound, output_up_bound, nonlinear_low_bound, nonlinear_up_bound,
               conv_filter_size, conv_channel_sizes, conv_leaky_ratio,
               decv_filter_size, decv_channel_sizes, decv_leaky_ratio,
               enfc_state_sizes, enfc_leaky_ratio, enfc_drop_rate, central_state_size, 

@@ -94,7 +94,7 @@ def set_flags():
     flags.DEFINE_float("LEARNING_DECAY_RATE", 0.99, "Decay rate of learning rate")
     flags.DEFINE_integer("LEARNING_DECAY_STEPS", int(2.5*1e3), "Decay steps of learning rate")
     # Non-linear func params
-    flags.DEFINE_float("PIXEL_BOUND", 16, "Bound for pixel distance") # 16
+    flags.DEFINE_float("PIXEL_BOUND", 0.01, "Bound for pixel distance") # 0.01
     flags.DEFINE_float("BOUND_CHANGE_RATE", 0.8, "Bound change rate") # 0.8
     flags.DEFINE_float("BOUND_CHANGE_EPOCHS", 2, "Num of epochs per bound change") # 2
     flags.DEFINE_float("MIN_BOUND", 1, "Minimum bound for pixel distance") # 4
