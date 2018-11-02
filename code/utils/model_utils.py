@@ -97,8 +97,8 @@ def set_flags():
     flags.DEFINE_float("PIXEL_BOUND", 0.01, "Bound for pixel distance") # 0.01
     flags.DEFINE_float("BOUND_CHANGE_RATE", 0.8, "Bound change rate") # 0.8
     flags.DEFINE_float("BOUND_CHANGE_EPOCHS", 2, "Num of epochs per bound change") # 2
-    flags.DEFINE_float("MIN_BOUND", 1, "Minimum bound for pixel distance") # 4
-    flags.DEFINE_float("MAX_BOUND", 128, "Maximum bound for pixel distance") # 128
+    flags.DEFINE_float("MIN_BOUND", 0.001, "Minimum bound for pixel distance") # 4
+    flags.DEFINE_float("MAX_BOUND", 1, "Maximum bound for pixel distance") # 128
     # Attack params
     flags.DEFINE_float("EPSILON", 1, "Epsilon for fgm attack") # 128
     flags.DEFINE_float("EPSILON_CHANGE_RATE", 0.8, "Epsilon change rate") # 128
