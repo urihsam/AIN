@@ -341,7 +341,7 @@ def train():
                     is_training: True,
                     partial_loss_holder: FLAGS.PARTIAL_LOSS
                 }
-                """[res1, res2] = sess.run([model._autoencoder.central_mu, model._autoencoder.central_log_sigma],
+                """[res0, res1, res2] = sess.run([model._autoencoder.kl, model._autoencoder.central_mu, model._autoencoder.central_sigma],
                                         feed_dict=feed_dict)
                 import pdb; pdb.set_trace()"""
                 # optimization

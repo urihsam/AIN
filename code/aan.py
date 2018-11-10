@@ -2,6 +2,7 @@ from utils.attack_utils import fgm
 import cae
 import scae
 import vcae
+import vcae_new
 import cavcae
 import resnet
 from utils.decorator import *
@@ -33,11 +34,17 @@ class AAN:
             elif FLAGS.AE_TYPE == "VARI":
                 print("Using Variational Convolutional Autoencoder")
                 FLAGS.VARI = True
-                self._autoencoder = vcae.VCAE(output_low_bound=self.output_low_bound, 
+                """self._autoencoder = vcae.VCAE(output_low_bound=self.output_low_bound, 
                                               output_up_bound=self.output_up_bound,
                                               nonlinear_low_bound = self.output_low_bound/2.0,
                                               nonlinear_up_bound = self.output_up_bound/2.0
-                                             )
+                                             )"""
+                self._autoencoder = vcae_new.VCAE(vtype="normal",
+                                                  output_low_bound=self.output_low_bound, 
+                                                  output_up_bound=self.output_up_bound,
+                                                  nonlinear_low_bound = self.output_low_bound/2.0,
+                                                  nonlinear_up_bound = self.output_up_bound/2.0
+                                                 )
             elif FLAGS.AE_TYPE == "TRAD":
                 print("Using Convolutional Autoencoder")
                 self._autoencoder = cae.CAE(output_low_bound=self.output_low_bound, 
