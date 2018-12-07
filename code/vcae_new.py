@@ -85,7 +85,7 @@ class VCAE(CAE):
             in_size = _func(in_size, state_sizes[idx], idx)
         # Last layer
         if sampling:
-            if self.vtype == "normal":
+            if self.vtype == "gauss":
                 for postfix in ["_mu", "_sigma"]:
                     _func(in_size, state_sizes[num_layer-1], num_layer-1, postfix)
             elif self.vtype == "vmf":
@@ -123,7 +123,7 @@ class VCAE(CAE):
         for layer_id in range(self.num_enfc-1):
             net = _func(net, layer_id)
         # Last layer
-        if self.vtype == "normal":
+        if self.vtype == "gauss":
             # compute mean and log of var of the normal distribution
             net_mu = tf.minimum(tf.maximum(-5.0, _func(net, self.num_enfc-1, "_mu")), 5.0)
             ## Set low and up bounds for log_sigma_sq
@@ -176,7 +176,7 @@ class VCAE(CAE):
         conv = self.conv_layers(inputs)
         assert conv.get_shape().as_list()[1:] == self.conv_out_shape
         self.central_mu, self.central_sigma = self.enfc_layers(conv)
-        if self.vtype == "normal":
+        if self.vtype == "gauss":
             assert self.central_mu.get_shape().as_list()[1:] == [self.central_state_size]
         elif self.vtype == "vmf":
             assert self.central_sigma.get_shape().as_list()[1:] == [1]
@@ -185,7 +185,7 @@ class VCAE(CAE):
         eps = tf.random_normal(tf.shape(self.central_mu), 0, 1, dtype=tf.float32)
         # z = mu + sigma*epsilon
         enfc = tf.add(self.central_mu, tf.multiply(tf.sqrt(tf.exp(self.central_log_sigma_sq)), eps))"""
-        if self.vtype == "normal":
+        if self.vtype == "gauss":
             self.central_distribution = tf.distributions.Normal(self.central_mu, self.central_sigma)
         elif self.vtype == "vmf":
             self.central_distribution = VonMisesFisher(self.central_mu, self.central_sigma)
@@ -195,7 +195,7 @@ class VCAE(CAE):
     
     @lazy_method
     def kl_distance(self):
-        if self.vtype == "normal":
+        if self.vtype == "gauss":
             self.prior = tf.distributions.Normal(tf.zeros(self.central_state_size), tf.ones(self.central_state_size))
             self.kl = self.central_distribution.kl_divergence(self.prior)
             loss_kl = tf.reduce_mean(tf.reduce_sum(self.kl, axis=1))

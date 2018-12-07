@@ -28,6 +28,8 @@ def set_flags():
     flags.DEFINE_string("AE_TYPE", "TRAD", "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
     flags.DEFINE_bool("SPARSE", False, "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
     flags.DEFINE_bool("VARI", False, "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
+    # AE params
+    flags.DEFINE_integer("BOTTLENECK", 2048, "The size of bottleneck")
     # Loss params
     flags.DEFINE_string("LOSS_MODE_TRANS", "C&W", "How to calculate loss from fake imgae") # ENTRO, C&W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C&W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C&W
@@ -40,6 +42,8 @@ def set_flags():
     flags.DEFINE_float("GAMMA_S", 1e-5, "Coefficient for RHO distance") # 0.01
     ## Gamma for variational kl distance
     flags.DEFINE_float("GAMMA_V", 1e-4, "Coefficient for KL distance") # 1e-3
+    ## Gamma for reconstruction loss
+    flags.DEFINE_float("GAMMA_R", 1e-2, "Coefficient for reconstruction loss")
     ## loss x
     flags.DEFINE_string("PARTIAL_LOSS", "FULL_LOSS", "Use loss x or loss y") # FULL_LOSS, LOSS_X, LOSS_Y
     flags.DEFINE_integer("LOSS_CHANGE_FREQUENCY", 5, "The frequency of changing loss") # 5

@@ -296,8 +296,8 @@ class CAE:
     def prediction(self, data, is_training):
         self.is_training = is_training
         states = self.encoder(data)
-        generated = self.decoder(states)
-        return generated
+        generated = self.decoder(states) + data
+        return ne.brelu(generated)
 
     def tf_load(self, sess, path, name='deep_cae.ckpt', spec=""):
         #saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
