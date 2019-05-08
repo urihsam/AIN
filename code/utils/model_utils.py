@@ -13,6 +13,8 @@ def set_flags():
     flags.DEFINE_string("TEST_LOG_PATH", "./graphs/test", "Path of log for testing")
     flags.DEFINE_string("DATA_DIR", "../../tiny-imagenet-200", "Data dir")
     # Data description
+    flags.DEFINE_bool("NORMALIZE", True, "Data is normalized to [0, 1]")
+    flags.DEFINE_bool("BIASED", False, "Data is shifted to [-1, 1]")
     flags.DEFINE_integer("NUM_CLASSES", 200, "Number of classification classes")
     flags.DEFINE_integer("IMAGE_ROWS", 64, "Input row dimension")
     flags.DEFINE_integer("IMAGE_COLS", 64, "Input column dimension")
@@ -74,10 +76,10 @@ def set_flags():
     flags.DEFINE_float("MAX_BETA_X_FAKE", 1, "Maximum of beta x") # 1    
     ## Beta y TRANS
     flags.DEFINE_float("BETA_Y_TRANS", 1, "Coefficient for loss of Y TRANS") # 5
-    flags.DEFINE_float("BETA_Y_TRANS_CHANGE_RATE", 1, "Change rate of Beta Y TRANS") # 1
-    flags.DEFINE_float("BETA_Y_TRANS_CHANGE_EPOCHS", 100, "Change epochs of Beta Y TRANS") # 100
+    flags.DEFINE_float("BETA_Y_TRANS_CHANGE_RATE", 1.1, "Change rate of Beta Y TRANS") # 1
+    flags.DEFINE_float("BETA_Y_TRANS_CHANGE_EPOCHS", 50, "Change epochs of Beta Y TRANS") # 50
     flags.DEFINE_float("MIN_BETA_Y_TRANS", 1, "Minimum of beta Y TRANS") # 50
-    flags.DEFINE_float("MAX_BETA_Y_TRANS", 1, "Maximum of beta Y TRANS") # 50
+    flags.DEFINE_float("MAX_BETA_Y_TRANS", 100, "Maximum of beta Y TRANS") # 100
     ## Beta y fake
     flags.DEFINE_float("BETA_Y_FAKE", 0, "Coefficient for loss of Y FAKE") # 0
     flags.DEFINE_float("BETA_Y_FAKE_CHANGE_RATE", 1.2, "Change rate of Beta Y FAKE") # 1.2
@@ -86,10 +88,10 @@ def set_flags():
     flags.DEFINE_float("MAX_BETA_Y_FAKE", 0, "Maximum of beta Y FAKE") # 120
     ## Beta y clean
     flags.DEFINE_float("BETA_Y_CLEAN", 1, "Coefficient for loss of Y CLEAN") # 1
-    flags.DEFINE_float("BETA_Y_CLEAN_CHANGE_RATE", 1, "Change rate of Beta Y CLEAN") # 1
-    flags.DEFINE_float("BETA_Y_CLEAN_CHANGE_EPOCHS", 100, "Change epochs of Beta Y CLEAN") # 100
+    flags.DEFINE_float("BETA_Y_CLEAN_CHANGE_RATE", 1.1, "Change rate of Beta Y CLEAN") # 1
+    flags.DEFINE_float("BETA_Y_CLEAN_CHANGE_EPOCHS", 50, "Change epochs of Beta Y CLEAN") # 50
     flags.DEFINE_float("MIN_BETA_Y_CLEAN", 1, "Minimum of beta Y CLEAN") # 1
-    flags.DEFINE_float("MAX_BETA_Y_CLEAN", 1, "Maximum of beta Y CLEAN") # 1
+    flags.DEFINE_float("MAX_BETA_Y_CLEAN", 100, "Maximum of beta Y CLEAN") # 1
     # Optimization params
     flags.DEFINE_string("OPT_TYPE", "ADAM", "The type of optimization") # ADAM, MOME, NEST
     flags.DEFINE_float("BATCH_MOME", 0.99, "Momentum for the moving average")

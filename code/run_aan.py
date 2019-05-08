@@ -9,7 +9,7 @@ from utils.data_utils import dataset
 
 model_utils.set_flags()
 
-data = dataset(FLAGS.DATA_DIR, normalize=True, biased=False)
+data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
 
 
 def main(arvg=None):
@@ -367,6 +367,7 @@ def train():
                 train_writer.add_summary(summary, train_idx)
                 # Print info
                 if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
+                    print("Epoch: {}".format(epoch+1))
                     print("Hyper-params info:")
                     print("Using Partial Loss:", FLAGS.PARTIAL_LOSS)
                     print("Pixel bound: [{:.4f}, {:.4f}]  Epsilon: {:.4f}".format(
@@ -406,6 +407,12 @@ def train():
             # Update Beta_X_FAKE
             if FLAGS.BETA_X_FAKE >= FLAGS.MIN_BETA_X_FAKE and FLAGS.BETA_X_FAKE <= FLAGS.MAX_BETA_X_FAKE and (epoch+1) % FLAGS.BETA_X_FAKE_CHANGE_EPOCHS == 0:
                 FLAGS.BETA_X_FAKE =  FLAGS.BETA_X_FAKE * FLAGS.BETA_X_FAKE_CHANGE_RATE
+            # Update BETA_Y_TRANS
+            if FLAGS.BETA_Y_TRANS >= FLAGS.MIN_BETA_Y_TRANS and FLAGS.BETA_Y_TRANS <= FLAGS.MAX_BETA_Y_TRANS and (epoch+1) % FLAGS.BETA_Y_TRANS_CHANGE_EPOCHS == 0:
+                FLAGS.BETA_Y_TRANS =  FLAGS.BETA_Y_TRANS * FLAGS.BETA_Y_TRANS_CHANGE_RATE
+            # Update Beta_Y_CLEAN
+            if FLAGS.BETA_Y_CLEAN >= FLAGS.MIN_BETA_Y_CLEAN and FLAGS.BETA_Y_CLEAN <= FLAGS.MAX_BETA_Y_CLEAN and (epoch+1) % FLAGS.BETA_Y_CLEAN_CHANGE_EPOCHS == 0:
+                FLAGS.BETA_Y_CLEAN =  FLAGS.BETA_Y_CLEAN * FLAGS.BETA_Y_CLEAN_CHANGE_RATE
             
                 
                 

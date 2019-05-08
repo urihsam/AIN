@@ -50,7 +50,7 @@ class resnet18:
     @lazy_method_no_scope
     def loss(self, prediction, groundtruth):
         logprob = tf.log(prediction + 1e-12)
-        cross_entropy = -tf.reduce_sum(groundtruth * logprob)
+        cross_entropy = tf.reduce_mean(-tf.reduce_sum(groundtruth * logprob, axis=1))
         # tensorboard
         tf.summary.scalar("Loss", cross_entropy)
         return cross_entropy

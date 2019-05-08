@@ -223,7 +223,7 @@ class CAE:
     @lazy_method
     def defc_layers(self, inputs, W_name="W_defc", b_name="b_defc"):
         net = inputs
-        for layer_id in range(self.num_enfc):
+        for layer_id in range(self.num_defc):
             weight_name = "{}{}".format(W_name, layer_id)
             bias_name = "{}{}".format(b_name, layer_id)
             curr_weight = self.defc_weights[weight_name]
@@ -297,7 +297,11 @@ class CAE:
         self.is_training = is_training
         states = self.encoder(data)
         generated = self.decoder(states) + data
-        return ne.brelu(generated)
+        if FLAGS.NORMALIZE:
+            out = ne.brelu(generated)
+        else:
+            out = ne.brelu(generated, low_bound=0, up_bound=255)
+        return out
 
     def tf_load(self, sess, path, name='deep_cae.ckpt', spec=""):
         #saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))

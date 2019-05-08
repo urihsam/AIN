@@ -37,12 +37,9 @@ def lazy_property(function, scope=None, *args, **kwargs):
     @property
     @functools.wraps(function)
     def decorator(self):
-        if not hasattr(self, attr):
-            with tf.variable_scope(name, *args, **kwargs):
-                setattr(self, attr, function(self))
-        return getattr(self, attr)
+        with tf.variable_scope(name, *args, **kwargs):
+            return function(self)
     
-
     return decorator
 
 
@@ -65,11 +62,8 @@ def lazy_method(function, scope=None, *args, **kwargs):
 
     @functools.wraps(function)
     def decorator(self, *args, **kwargs):
-        if not hasattr(self, attr):
-            #import pdb; pdb.set_trace()
-            with tf.variable_scope(name):
-                setattr(self, attr, function(self, *args, **kwargs))
-        return getattr(self, attr)
+        with tf.variable_scope(name):
+            return function(self, *args, **kwargs)
     
 
     return decorator
@@ -91,9 +85,7 @@ def lazy_method_no_scope(function, *args, **kwargs):
 
     @functools.wraps(function)
     def decorator(self, *args, **kwargs):
-        if not hasattr(self, attr):
-            setattr(self, attr, function(self, *args, **kwargs))
-        return getattr(self, attr)
+        return function(self, *args, **kwargs)
     
 
     return decorator
