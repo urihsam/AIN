@@ -1,4 +1,4 @@
-import aan
+import nn.ain as ain
 import os
 from tensorflow.examples.tutorials.mnist import input_data
 from PIL import Image
@@ -190,7 +190,7 @@ def test():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
+        model = ain.AIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -246,7 +246,7 @@ def test():
             x_offset += im1.size[0]
 
         new_im.show()
-        new_im.save('AAN_results.jpg')
+        new_im.save('AIN_results.jpg')
 
 
 def train():
@@ -274,7 +274,7 @@ def train():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
         # model
-        model = aan.AAN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
+        model = ain.AIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
         model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake), \
             (model_max_dist_true, model_max_dist_fake) = model.loss_x(beta_x_t_holder, beta_x_f_holder)
         model_loss_y, (model_ly_trans, model_ly_fake, model_ly_clean), (model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean) =\
@@ -310,7 +310,7 @@ def train():
         model._target.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
         if FLAGS.load_AE:
             print("Autoencoder loaded.")
-            model._autoencoder.tf_load(sess, FLAGS.AE_PATH)
+            model.tf_load(sess)
         # For tensorboard
         train_writer = model_utils.init_writer(FLAGS.TRAIN_LOG_PATH, g)
         valid_writer = model_utils.init_writer(FLAGS.VALID_LOG_PATH, g)

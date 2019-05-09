@@ -1,6 +1,6 @@
 """ Sparse Convolutional Autoconvder
 """
-from cae import CAE
+from nn.cae import CAE
 from dependency import *
 import utils.net_element as ne
 from utils.decorator import lazy_method, lazy_property, lazy_method_no_scope

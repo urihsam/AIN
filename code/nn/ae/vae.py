@@ -1,6 +1,6 @@
 """ Variational Convolutional Autoconvder
 """
-from cae import CAE
+from nn.ae.cae import CAE
 from dependency import *
 import utils.net_element as ne
 from utils.decorator import lazy_method, lazy_property, lazy_method_no_scope
@@ -8,7 +8,7 @@ from hyperspherical_vae.distributions import VonMisesFisher
 from hyperspherical_vae.distributions import HypersphericalUniform
 
 
-class VCAE(CAE):
+class VAE(CAE):
     def __init__(self, 
                  vtype,
                  output_low_bound, 
@@ -41,7 +41,7 @@ class VCAE(CAE):
                  # img channel
                  img_channel=None,
                  # switch
-                 use_batch_norm = False
+                 use_norm = None
                 ):
         self.vtype = vtype
         super().__init__(output_low_bound, output_up_bound, nonlinear_low_bound, nonlinear_up_bound,
@@ -49,7 +49,7 @@ class VCAE(CAE):
               decv_filter_sizes, decv_strides, decv_padding, decv_channel_sizes, decv_leaky_ratio,
               enfc_state_sizes, enfc_leaky_ratio, enfc_drop_rate, central_state_size, 
               defc_state_sizes, defc_leaky_ratio, defc_drop_rate, 
-              img_channel, use_batch_norm
+              img_channel, use_norm
              )
 
     
@@ -110,8 +110,10 @@ class VCAE(CAE):
             curr_bias = self.enfc_biases[bias_name]
             net = ne.fully_conn(net, weights=curr_weight, biases=curr_bias)
             # batch normalization
-            if self.use_batch_norm:
+            if self.use_norm == "BATCH":
                 net = ne.batch_norm(net, self.is_training, axis=1)
+            elif self.use_norm == "LAYER":
+                net = ne.layer_norm(net, self.is_training)
             #net = ne.leaky_brelu(net, self.enfc_leaky_ratio[layer_id], self.enfc_low_bound[layer_id], self.enfc_up_bound[layer_id]) # Nonlinear act
             if act_func=="leaky":
                 net = ne.leaky_relu(net, self.enfc_leaky_ratio[layer_id])
@@ -125,11 +127,14 @@ class VCAE(CAE):
         # Last layer
         if self.vtype == "gauss":
             # compute mean and log of var of the normal distribution
-            net_mu = tf.minimum(tf.maximum(-5.0, _func(net, self.num_enfc-1, "_mu")), 5.0)
+            """net_mu = tf.minimum(tf.maximum(-5.0, _func(net, self.num_enfc-1, "_mu")), 5.0)
             ## Set low and up bounds for log_sigma_sq
-            """net_log_sigma_sq = tf.minimum(tf.maximum(-10.0, _func(net, self.num_enfc-1, "_sigma")), 5.0)
-            net_sigma = tf.sqrt(tf.exp(net_log_sigma_sq))"""
-            net_sigma = tf.maximum(_func(net, self.num_enfc-1, "_sigma", "soft"), 5.0)
+            '''net_log_sigma_sq = tf.minimum(tf.maximum(-10.0, _func(net, self.num_enfc-1, "_sigma")), 5.0)
+            net_sigma = tf.sqrt(tf.exp(net_log_sigma_sq))'''
+            net_sigma = tf.maximum(_func(net, self.num_enfc-1, "_sigma", "soft"), 5.0)"""
+            net_mu = _func(net, self.num_enfc-1, "_mu")
+            net_log_sigma_sq = tf.minimum(tf.maximum(-10.0, _func(net, self.num_enfc-1, "_sigma")), 5.0)
+            net_sigma = tf.sqrt(tf.exp(net_log_sigma_sq))
         elif self.vtype == "vmf":
             # compute mean and log of var of the von Mises-Fisher
             #net_mu = tf.minimum(tf.maximum(0.0, _func(net, self.num_enfc-1, "_mu", None)), 0.0)
@@ -146,30 +151,6 @@ class VCAE(CAE):
         net_sigma = tf.identity(net_sigma, name="output_sigma")
         return net_mu, net_sigma
     
-
-    @lazy_method
-    def defc_layers(self, inputs, W_name="W_defc", b_name="b_defc"):
-        net = inputs
-        for layer_id in range(self.num_enfc):
-            weight_name = "{}{}".format(W_name, layer_id)
-            bias_name = "{}{}".format(b_name, layer_id)
-            curr_weight = self.defc_weights[weight_name]
-            curr_bias = self.defc_biases[bias_name]
-            net = ne.fully_conn(net, weights=curr_weight, biases=curr_bias)
-            # batch normalization
-            if self.use_batch_norm:
-                net = ne.batch_norm(net, self.is_training, axis=1)
-            
-            #net = ne.leaky_brelu(net, self.defc_leaky_ratio[layer_id], self.defc_low_bound[layer_id], self.defc_up_bound[layer_id]) # Nonlinear act
-            net = ne.leaky_relu(net, self.defc_leaky_ratio[layer_id])
-            net = ne.drop_out(net, self.defc_drop_rate[layer_id], self.is_training)
-            #net = ne.elu(net)
-
-        net = tf.identity(net, name='output')
-        net = tf.reshape(net, [-1] + self.decv_in_shape)
-        #import pdb; pdb.set_trace()
-        return net
-
     
     @lazy_method
     def encoder(self, inputs):
@@ -206,6 +187,13 @@ class VCAE(CAE):
         else:
             raise NotImplemented
         return loss_kl
+    
+    @lazy_method
+    def gauss_kl_distance(self):
+        loss = -0.5 * tf.reduce_sum(
+            1 + self.central_log_sigma_sq - tf.square(self.central_mu) - tf.exp(self.central_log_sigma_sq), 1)
+            
+        return loss
 
     
     def tf_load(self, sess, path, name='deep_vcae.ckpt', spec=""):

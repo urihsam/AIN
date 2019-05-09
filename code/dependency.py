@@ -1,7 +1,7 @@
 import keras
 import numpy as np
 import tensorflow as tf
-from keras import backend as K
+import utils.net_element as ne
 from tensorflow.python.platform import flags
 flags = tf.app.flags 
 FLAGS = flags.FLAGS

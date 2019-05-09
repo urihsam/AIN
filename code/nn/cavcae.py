@@ -1,6 +1,6 @@
 """ Channel-attentive Variational Convolutional Autoconvder
 """
-import vcae
+import nn.vcae as vcae
 from dependency import *
 import utils.net_element as ne
 from utils.decorator import lazy_method, lazy_property, lazy_method_no_scope

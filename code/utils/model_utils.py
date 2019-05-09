@@ -4,6 +4,17 @@ import os
 def set_flags():
     flags.DEFINE_bool("train", False, "Train and save the ATN model.")
     flags.DEFINE_bool("local", False, "Run this model locally or on the cloud")
+    flags.DEFINE_string("ENC_NAME", "Encoder", "The name of Encoder part")
+    flags.DEFINE_string("EMB_NAME", "Embedder", "The name of Embedder part")
+    flags.DEFINE_string("DEC_NAME", "Decoder", "The name of Decoder part")
+    flags.DEFINE_integer("CENTRAL_CHANNEL_SIZE", 128, "The size of the central channel")
+    flags.DEFINE_integer("NUM_ENC_RES_BLOCK", 5, "The num of residual block")
+    flags.DEFINE_integer("ENC_RES_BLOCK_SIZE", 3, "The num of layers in each block")
+    flags.DEFINE_integer("NUM_DEC_RES_BLOCK", 5, "The num of residual block")
+    flags.DEFINE_integer("DEC_RES_BLOCK_SIZE", 3, "The num of layers in each block")
+    flags.DEFINE_integer("EMB_SIZE", 512, "The embedding size")
+    flags.DEFINE_integer("EMB_TOPK", 3, "The top k smallest")
+    flags.DEFINE_integer("EMB_SUBK", 8, "The sub k smallest")
     # Path
     flags.DEFINE_string("RESNET18_PATH", "./models/target_classifier/resnet18", "Path of Resnet18")
     flags.DEFINE_string("AE_PATH", "./models/AE", "Path of AAN")
@@ -11,7 +22,7 @@ def set_flags():
     flags.DEFINE_string("TRAIN_LOG_PATH", "./graphs/train", "Path of log for training")
     flags.DEFINE_string("VALID_LOG_PATH", "./graphs/valid", "Path of log for validation")
     flags.DEFINE_string("TEST_LOG_PATH", "./graphs/test", "Path of log for testing")
-    flags.DEFINE_string("DATA_DIR", "../../tiny-imagenet-200", "Data dir")
+    flags.DEFINE_string("DATA_DIR", "/Users/mashiru/Life/My-Emory/Research/Research-Project/Data/tiny-imagenet-200", "Data dir")
     # Data description
     flags.DEFINE_bool("NORMALIZE", True, "Data is normalized to [0, 1]")
     flags.DEFINE_bool("BIASED", False, "Data is shifted to [-1, 1]")
@@ -94,6 +105,11 @@ def set_flags():
     flags.DEFINE_float("MAX_BETA_Y_CLEAN", 100, "Maximum of beta Y CLEAN") # 1
     # Optimization params
     flags.DEFINE_string("OPT_TYPE", "ADAM", "The type of optimization") # ADAM, MOME, NEST
+    flags.DEFINE_string("ENC_OUT_NORM", "NONE", "Use batch normalization or layer normalization or none")
+    flags.DEFINE_string("ENC_NORM", "NONE", "Use batch normalization or layer normalization or none")
+    flags.DEFINE_string("EMB_NORM", "NONE", "Use batch normalization or layer normalization or none")
+    flags.DEFINE_string("DEC_IN_NORM", "NONE", "Use batch normalization or layer normalization or none")
+    flags.DEFINE_string("DEC_NORM", "NONE", "Use batch normalization or layer normalization or none")
     flags.DEFINE_float("BATCH_MOME", 0.99, "Momentum for the moving average")
     flags.DEFINE_float("BATCH_EPSILON", 0.001, "Small float added to variance to avoid dividing by zero")
     flags.DEFINE_float("LEARNING_RATE", 1e-4, "Learning rate of optimization")

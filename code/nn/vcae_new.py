@@ -1,13 +1,16 @@
 """ Variational Convolutional Autoconvder
 """
-from cae import CAE
+from nn.cae import CAE
 from dependency import *
 import utils.net_element as ne
 from utils.decorator import lazy_method, lazy_property, lazy_method_no_scope
+from hyperspherical_vae.distributions import VonMisesFisher
+from hyperspherical_vae.distributions import HypersphericalUniform
 
 
 class VCAE(CAE):
     def __init__(self, 
+                 vtype,
                  output_low_bound, 
                  output_up_bound,
                  # relu bounds
@@ -40,7 +43,7 @@ class VCAE(CAE):
                  # switch
                  use_batch_norm = False
                 ):
-        
+        self.vtype = vtype
         super().__init__(output_low_bound, output_up_bound, nonlinear_low_bound, nonlinear_up_bound,
               conv_filter_sizes, conv_strides, conv_padding, conv_channel_sizes, conv_leaky_ratio,
               decv_filter_sizes, decv_strides, decv_padding, decv_channel_sizes, decv_leaky_ratio,
@@ -61,16 +64,16 @@ class VCAE(CAE):
         num_layer = len(state_sizes)
         _weights = {}
         _biases = {}
-        def _func(in_size, idx, postfix=""):
+        def _func(in_size, out_size, idx, postfix=""):
             W_key = "{}{}{}".format(W_name, idx, postfix)
-            W_shape = [in_size, state_sizes[idx]]
+            W_shape = [in_size, out_size]
             _weights[W_key] = ne.weight_variable(W_shape, name=W_key)
 
             b_key = "{}{}{}".format(b_name, idx, postfix)
-            b_shape = [state_sizes[idx]]
+            b_shape = [out_size]
             _biases[b_key] = ne.bias_variable(b_shape, name=b_key)
 
-            in_size = state_sizes[idx]
+            in_size = out_size
 
             # tensorboard
             tf.summary.histogram("Weight_"+W_key, _weights[W_key])
@@ -79,13 +82,19 @@ class VCAE(CAE):
             return in_size
         
         for idx in range(num_layer-1):
-            in_size = _func(in_size, idx)
+            in_size = _func(in_size, state_sizes[idx], idx)
         # Last layer
         if sampling:
-            for postfix in ["_mu", "_log_sigma_sq"]:
-                _func(in_size, num_layer-1, postfix)
+            if self.vtype == "gauss":
+                for postfix in ["_mu", "_sigma"]:
+                    _func(in_size, state_sizes[num_layer-1], num_layer-1, postfix)
+            elif self.vtype == "vmf":
+                _func(in_size, state_sizes[num_layer-1], num_layer-1, "_mu")
+                _func(in_size, 1, num_layer-1, "_sigma")
+            else:
+                raise NotImplemented
         else:
-             _func(in_size, num_layer-1)
+             _func(in_size, state_sizes[num_layer-1], num_layer-1)
         #import pdb; pdb.set_trace()
 
         return _weights, _biases, num_layer
@@ -94,7 +103,7 @@ class VCAE(CAE):
     @lazy_method
     def enfc_layers(self, inputs, W_name="W_enfc", b_name="b_enfc"):
         net = tf.reshape(inputs, [-1, self.conv_out_shape[0] * self.conv_out_shape[1] * self.conv_out_shape[2]])
-        def _func(net, layer_id, postfix=""):
+        def _func(net, layer_id, postfix="", act_func="leaky"):
             weight_name = "{}{}{}".format(W_name, layer_id, postfix)
             bias_name = "{}{}{}".format(b_name, layer_id, postfix)
             curr_weight = self.enfc_weights[weight_name]
@@ -104,21 +113,38 @@ class VCAE(CAE):
             if self.use_batch_norm:
                 net = ne.batch_norm(net, self.is_training, axis=1)
             #net = ne.leaky_brelu(net, self.enfc_leaky_ratio[layer_id], self.enfc_low_bound[layer_id], self.enfc_up_bound[layer_id]) # Nonlinear act
-            net = ne.leaky_relu(net, self.enfc_leaky_ratio[layer_id])
-            net = ne.drop_out(net, self.enfc_drop_rate[layer_id], self.is_training)
-            #net = ne.elu(net)
+            if act_func=="leaky":
+                net = ne.leaky_relu(net, self.enfc_leaky_ratio[layer_id])
+            elif act_func=="soft":
+                net = tf.nn.softplus(net)
+            #net = ne.drop_out(net, self.enfc_drop_rate[layer_id], self.is_training)
             return net
 
         for layer_id in range(self.num_enfc-1):
             net = _func(net, layer_id)
         # Last layer
-        net_mu = _func(net, self.num_enfc-1, "_mu")
-        ## Set low and up bounds for log_sigma_sq
-        net_log_sigma_sq = tf.minimum(tf.maximum(-10.0, _func(net, self.num_enfc-1, "_log_sigma_sq")), 5.0)
+        if self.vtype == "gauss":
+            # compute mean and log of var of the normal distribution
+            net_mu = tf.minimum(tf.maximum(-5.0, _func(net, self.num_enfc-1, "_mu")), 5.0)
+            ## Set low and up bounds for log_sigma_sq
+            """net_log_sigma_sq = tf.minimum(tf.maximum(-10.0, _func(net, self.num_enfc-1, "_sigma")), 5.0)
+            net_sigma = tf.sqrt(tf.exp(net_log_sigma_sq))"""
+            net_sigma = tf.maximum(_func(net, self.num_enfc-1, "_sigma", "soft"), 5.0)
+        elif self.vtype == "vmf":
+            # compute mean and log of var of the von Mises-Fisher
+            #net_mu = tf.minimum(tf.maximum(0.0, _func(net, self.num_enfc-1, "_mu", None)), 0.0)
+            net_mu = _func(net, self.num_enfc-1, "_mu", None)
+            net_mu = tf.nn.l2_normalize(net_mu, axis=-1)
+            #net_mu = tf.nn.l2_normalize(_func(net, self.num_enfc-1, "_mu"), axis=1)
+            ## Set low and up bounds for log_sigma_sq
+            #net_log_sigma_sq = tf.minimum(tf.maximum(0.0, _func(net, self.num_enfc-1, "_log_sigma_sq")), 10.0)
+            net_sigma = _func(net, self.num_enfc-1, "_sigma", "soft") + 200.0
+        else:
+            raise NotImplemented
 
         net_mu = tf.identity(net_mu, name="output_mu")
-        net_log_sigma_sq = tf.identity(net_log_sigma_sq, name="output_log_sigma_sq")
-        return net_mu, net_log_sigma_sq
+        net_sigma = tf.identity(net_sigma, name="output_sigma")
+        return net_mu, net_sigma
     
 
     @lazy_method
@@ -149,22 +175,37 @@ class VCAE(CAE):
     def encoder(self, inputs):
         conv = self.conv_layers(inputs)
         assert conv.get_shape().as_list()[1:] == self.conv_out_shape
-        self.central_mu, self.central_log_sigma_sq = self.enfc_layers(conv)
-        assert self.central_mu.get_shape().as_list()[1:] == [self.central_state_size]
-        assert self.central_log_sigma_sq.get_shape().as_list()[1:] == [self.central_state_size]
-        # epsilon
+        self.central_mu, self.central_sigma = self.enfc_layers(conv)
+        if self.vtype == "gauss":
+            assert self.central_mu.get_shape().as_list()[1:] == [self.central_state_size]
+        elif self.vtype == "vmf":
+            assert self.central_sigma.get_shape().as_list()[1:] == [1]
+        
+        """# epsilon
         eps = tf.random_normal(tf.shape(self.central_mu), 0, 1, dtype=tf.float32)
         # z = mu + sigma*epsilon
-        enfc = tf.add(self.central_mu, tf.multiply(tf.sqrt(tf.exp(self.central_log_sigma_sq)), eps))
-        return enfc
+        enfc = tf.add(self.central_mu, tf.multiply(tf.sqrt(tf.exp(self.central_log_sigma_sq)), eps))"""
+        if self.vtype == "gauss":
+            self.central_distribution = tf.distributions.Normal(self.central_mu, self.central_sigma)
+        elif self.vtype == "vmf":
+            self.central_distribution = VonMisesFisher(self.central_mu, self.central_sigma)
+        self.central_states = self.central_distribution.sample()
+        return self.central_states
 
     
     @lazy_method
     def kl_distance(self):
-        loss = -0.5 * tf.reduce_mean(
-            tf.reduce_sum(1 + self.central_log_sigma_sq - tf.square(self.central_mu) - tf.exp(self.central_log_sigma_sq), 1)
-            )
-        return loss
+        if self.vtype == "gauss":
+            self.prior = tf.distributions.Normal(tf.zeros(self.central_state_size), tf.ones(self.central_state_size))
+            self.kl = self.central_distribution.kl_divergence(self.prior)
+            loss_kl = tf.reduce_mean(tf.reduce_sum(self.kl, axis=1))
+        elif self.vtype == 'vmf':
+            self.prior = HypersphericalUniform(self.central_state_size-1, dtype=tf.float32)
+            self.kl = self.central_distribution.kl_divergence(self.prior)
+            loss_kl = tf.reduce_mean(self.kl)
+        else:
+            raise NotImplemented
+        return loss_kl
 
     
     def tf_load(self, sess, path, name='deep_vcae.ckpt', spec=""):

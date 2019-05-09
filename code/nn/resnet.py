@@ -1,7 +1,7 @@
 from dependency import *
 from utils.decorator import lazy_method, lazy_method_no_scope
 from utils.ckpt_reader import ckpt_to_dict
-from resnet_model import Model
+from nn.resnet_model import Model
 
 
 class resnet18:
