@@ -5,9 +5,11 @@ import nn.vcae as vcae
 import nn.vcae_new as vcae_new
 import nn.cavcae as cavcae
 import nn.resnet as resnet
-import nn.ae.resenc as resenc
-import nn.ae.resdec as resdec
-import nn.embedder as embedder
+import nn.ae.resenc_v2 as resenc
+import nn.ae.resdec_v2 as resdec
+#import nn.embedder_v2 as embedder
+#import nn.embedder_v3 as embedder
+import nn.embedder_v4 as embedder
 from utils.decorator import *
 from dependency import *
     
@@ -22,7 +24,8 @@ class AIN:
         self.label = label
         self.output_low_bound = low_bound
         self.output_up_bound = up_bound
-        self.central_emb_size = FLAGS.EMB_SIZE
+        self.central_g_emb_size = FLAGS.G_EMB_SIZE
+        self.central_d_emb_size = FLAGS.D_EMB_SIZE
         self.central_channel_size = FLAGS.CENTRAL_CHANNEL_SIZE
         self.attack_epsilon = attack_epsilon
         self.is_training = is_training
@@ -55,7 +58,7 @@ class AIN:
                     self._encoder = resenc.RESENC(
                         conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3]],
                         conv_strides = [[2,2], [1,1], [2,2],[1,1]], 
-                        conv_channel_sizes=[64, 256, 1024, 128], 
+                        conv_channel_sizes=[64, 256, 512, 1024], 
                         conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2],
                         num_res_block=FLAGS.NUM_ENC_RES_BLOCK,
                         res_block_size=FLAGS.ENC_RES_BLOCK_SIZE,
@@ -68,11 +71,13 @@ class AIN:
 
                 # Embedder
                 with tf.variable_scope(FLAGS.EMB_NAME) as emb_scope:
-                    self._dec_embedder = embedder.EMBEDDER(self._central_states.get_shape().as_list()[1:], 
-                                                    [self.central_emb_size],
-                                                    emb_norm=FLAGS.EMB_NORM)
-                    self._central_embedded, self._embed_k_vs, self._embed_k_coefs =\
-                        self._dec_embedder.evaluate(self._central_states, self.is_training, res_start=1)
+                    self._embedder = embedder.EMBEDDER(
+                                                    emb_shape=self._central_states.get_shape().as_list()[1:], 
+                                                    g_emb_size=self.central_g_emb_size,
+                                                    d_emb_size=self.central_d_emb_size,
+                                                    emb_norm=FLAGS.EMB_NORM,
+                                                    emb_type=FLAGS.EMB_TYPE)
+                    self._central_embedded, self.g_coef = self._embedder.evaluate(self._central_states, self.is_training)
 
                 # Decoder
                 with tf.variable_scope(FLAGS.DEC_NAME) as dec_scope:
@@ -80,7 +85,7 @@ class AIN:
                         self.output_low_bound, self.output_up_bound,
                         decv_filter_sizes=[[3,3], [4,4], [3,3], [4,4]],
                         decv_strides = [[1,1], [2,2], [1,1], [2,2]], 
-                        decv_channel_sizes=[128, 1024, 256, 64], 
+                        decv_channel_sizes=[1024, 512, 256, 64], 
                         decv_leaky_ratio=[0.2, 0.2, 0.2, 0.2],
                         num_res_block=FLAGS.NUM_DEC_RES_BLOCK,
                         res_block_size=FLAGS.DEC_RES_BLOCK_SIZE,
@@ -91,6 +96,7 @@ class AIN:
                         use_norm=FLAGS.DEC_NORM)
                     self._generated_t = self._decoder_t.evaluate(self._central_embedded, self.is_training)
                 generated = self._generated_t + data
+                
                 if FLAGS.NORMALIZE:
                     self._autoencoder_prediction = ne.brelu(generated)
                 else:
