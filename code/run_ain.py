@@ -423,6 +423,13 @@ def train():
             print("Validation")
             valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=total_valid_batch, valid=True)
             
+
+            if valid_dict["adv_acc"] > 0.1:
+                break
+            else:
+                model.tf_save(sess)
+                print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
+            '''
             if valid_dict["adv_acc"] < min_adv_acc:
                 min_adv_acc = valid_dict["adv_acc"]
                 alert_count = 0
@@ -441,14 +448,12 @@ def train():
                 FLAGS.KAPPA_FOR_CLEAN = FLAGS.KAPPA_CLEAN_CHANGE_RATE * FLAGS.KAPPA_FOR_CLEAN
                 print("Kappa trans was changed to {:.4f}".format(FLAGS.KAPPA_FOR_TRANS))
                 print("Kappa clean was changed to {:.4f}".format(FLAGS.KAPPA_FOR_CLEAN))
-            
+            '''
             print("******************************************************************")
             print()
             print()
         print("Optimization Finished!")
 
-        model.tf_save(sess)
-        print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
 
         train_writer.close() 
         valid_writer.close()

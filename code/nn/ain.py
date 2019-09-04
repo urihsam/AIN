@@ -143,7 +143,7 @@ class AIN:
         max_dist_fake = tf.reduce_max(tf.abs(x_adv-x_fake))
         def _dist(vec1, vec2):
             if FLAGS.NORM_TYPE == "L2":
-                Lx_dist = tf.reduce_mean(tf.reduce_sum(tf.square(vec1-vec2), 1))
+                Lx_dist = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(vec1-vec2), 1)))
             if FLAGS.NORM_TYPE == "L1":
                 Lx_dist = tf.reduce_mean(tf.reduce_sum(tf.abs(vec1-vec2), 1))
             elif FLAGS.NORM_TYPE == "INF":
@@ -220,7 +220,7 @@ class AIN:
             return beta_t * Ly_dist, Ly_dist
 
 
-        def loss_y_from_fake(): 
+        def loss_y_f mrom_fake(): 
             if FLAGS.LOSS_MODE_FAKE == "LOGITS": # Minimize the distance of logits from faked data
                 Ly_dist = tf.reduce_mean(
                     # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_logits-self._target_fake_logits), 1))
