@@ -305,6 +305,7 @@ def train():
         graph_dict["merged_summary"] = merged_summary
 
     with tf.Session(graph=g) as sess:
+        #import pdb; pdb.set_trace()
         sess.run(tf.global_variables_initializer())
         # Load target classifier
         model._target.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')

@@ -22,6 +22,7 @@ class RESENC(ABCCNN):
                  res_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
                  res_leaky_ratio=[0.2, 0.2],
                  # out conv layer
+                 use_out_layer = False,
                  out_filter_size=[3,3],
                  out_stride = [1,1],
                  out_padding = "SAME", 
@@ -67,12 +68,14 @@ class RESENC(ABCCNN):
             self.res_leaky_ratio = res_leaky_ratio
         else:
             self.res_leaky_ratio = [res_leaky_ratio] * self.res_block_size
-        # out conv layer
-        self.out_filter_size = out_filter_size
-        self.out_stride = out_stride
-        self.out_padding = out_padding
-        self.out_channel_size = out_channel_size
-        self.out_leaky_ratio = out_leaky_ratio
+        self.use_out_layer =  use_out_layer
+        if self.use_out_layer:
+            # out conv layer
+            self.out_filter_size = out_filter_size
+            self.out_stride = out_stride
+            self.out_padding = out_padding
+            self.out_channel_size = out_channel_size
+            self.out_leaky_ratio = out_leaky_ratio
         # img channel
         if img_channel == None:
             self.img_channel = FLAGS.NUM_CHANNELS
@@ -85,7 +88,8 @@ class RESENC(ABCCNN):
 
         self.conv_filters, self.conv_biases, self.num_conv = self.conv_weights_biases()
         self.res_filters, self.res_biases = self.res_weights_biases()
-        self.out_filter, self.out_bias, _ = self.out_weight_bias()
+        if self.use_out_layer:
+            self.out_filter, self.out_bias, _ = self.out_weight_bias()
 
 
     @lazy_method
@@ -200,8 +204,9 @@ class RESENC(ABCCNN):
         self.is_training = is_training
         conv_res = self.conv_res_groups(data)
         #assert res.get_shape().as_list()[1:] == self.res_out_shape
-        out = self.out_layer(conv_res)
-        return out
+        if self.use_out_layer:
+            conv_res = self.out_layer(conv_res)
+        return conv_res
 
 
     def tf_load(self, sess, path, scope, name='deep_resenc.ckpt', spec=""):

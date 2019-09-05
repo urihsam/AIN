@@ -2,15 +2,21 @@ import tensorflow as tf
 from dependency import *
 
 
-def weight_variable(shape, name):
+def weight_variable(shape, name, init_type="CONV"):
     """
     """
-    #initializer = tf.contrib.layers.variance_scaling_initializer(factor=2.0, mode='FAN_IN', uniform=False) # He
-    #initializer = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_AVG', uniform=True) # Xaiver 1
-    #initializer = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_AVG', uniform=False) # Xaiver 2
-    initializer = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_IN', uniform=True) # Convolutional
-    #initializer = tf.variance_scaling_initializer(scale=2.0, mode='fan_in', distribution='normal')
-    #initializer = tf.truncated_normal_initializer(stddev=0.1)
+    if init_type == "HE":
+        initializer = tf.contrib.layers.variance_scaling_initializer(factor=2.0, mode='FAN_IN', uniform=False) # He
+    elif init_type == "XV_1":
+        initializer = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_AVG', uniform=True) # Xaiver 1
+    elif init_type == "XV_2":
+        initializer = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_AVG', uniform=False) # Xaiver 2
+    elif init_type == "CONV":
+        initializer = tf.contrib.layers.variance_scaling_initializer(factor=1.0, mode='FAN_IN', uniform=True) # Convolutional
+    elif init_type == "VS":
+        initializer = tf.variance_scaling_initializer(scale=2.0, mode='fan_in', distribution='normal')
+    elif init_type == "TN":
+        initializer = tf.truncated_normal_initializer(stddev=1.0)
     return tf.get_variable(initializer=initializer, shape=shape, name=name)
 
 

@@ -24,6 +24,7 @@ class RESDEC(ABCCNN):
                  res_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
                  res_leaky_ratio=[0.2, 0.2],
                  # in conv layer
+                 use_in_layer = False,
                  in_filter_size=[3,3],
                  in_stride = [1,1],
                  in_padding = "SAME", 
@@ -72,11 +73,13 @@ class RESDEC(ABCCNN):
         else:
             self.res_leaky_ratio = [res_leaky_ratio] * self.res_block_size
         # in conv layer
-        self.in_filter_size = in_filter_size
-        self.in_stride = in_stride
-        self.in_padding = in_padding
-        self.in_channel_size = in_channel_size
-        self.in_leaky_ratio = in_leaky_ratio
+        self.use_in_layer = use_in_layer
+        if self.use_in_layer:
+            self.in_filter_size = in_filter_size
+            self.in_stride = in_stride
+            self.in_padding = in_padding
+            self.in_channel_size = in_channel_size
+            self.in_leaky_ratio = in_leaky_ratio
         # img channel
         if img_channel == None:
             self.img_channel = FLAGS.NUM_CHANNELS
@@ -90,7 +93,8 @@ class RESDEC(ABCCNN):
         #self.decv_in_shape = [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.decv_channel_sizes[0]]
         #self.decv_out_shape = [FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS]
 
-        self.in_filter, self.in_bias, _ = self.in_weight_bias()
+        if self.use_in_layer:
+            self.in_filter, self.in_bias, _ = self.in_weight_bias()
         self.res_filters, self.res_biases = self.res_weights_biases()
         self.decv_filters, self.decv_biases, self.num_decv = self.decv_weights_biases()
 
@@ -221,8 +225,9 @@ class RESDEC(ABCCNN):
     def evaluate(self, inputs, is_training):
         self.is_training = is_training
         #assert inputs.get_shape().as_list()[1:] == self.res_in_shape
-        in_ = self.in_layer(inputs)
-        generated = self.decv_res_groups(in_)
+        if self.use_in_layer:
+            inputs = self.in_layer(inputs)
+        generated = self.decv_res_groups(inputs)
         #assert generated.get_shape().as_list()[1:] == self.decv_out_shape
         return generated
 

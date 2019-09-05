@@ -13,8 +13,11 @@ def set_flags():
     flags.DEFINE_integer("NUM_DEC_RES_BLOCK", 5, "The num of residual block")
     flags.DEFINE_integer("DEC_RES_BLOCK_SIZE", 3, "The num of layers in each block")
     flags.DEFINE_integer("EMB_SIZE", 512, "The embedding size")
+    flags.DEFINE_integer("G_EMB_SIZE", 512, "The embedding size")
+    flags.DEFINE_integer("D_EMB_SIZE", 512, "The embedding size")
     flags.DEFINE_integer("EMB_TOPK", 3, "The top k smallest")
     flags.DEFINE_integer("EMB_SUBK", 8, "The sub k smallest")
+    flags.DEFINE_string("EMB_TYPE", "MINIMUM", "SOFTMAX or MINIMUM")
     # Path
     flags.DEFINE_string("RESNET18_PATH", "./models/target_classifier/resnet18", "Path of Resnet18")
     flags.DEFINE_string("AE_PATH", "./models/AE", "Path of AAN")
@@ -105,9 +108,9 @@ def set_flags():
     flags.DEFINE_float("MAX_BETA_Y_CLEAN", 100, "Maximum of beta Y CLEAN") # 1
     # Optimization params
     flags.DEFINE_string("OPT_TYPE", "ADAM", "The type of optimization") # ADAM, MOME, NEST
-    flags.DEFINE_string("ENC_OUT_NORM", "NONE", "Use batch normalization or layer normalization or none")
     flags.DEFINE_string("ENC_NORM", "NONE", "Use batch normalization or layer normalization or none")
-    flags.DEFINE_string("EMB_NORM", "NONE", "Use batch normalization or layer normalization or none")
+    flags.DEFINE_string("ENC_OUT_NORM", "NONE", "Use batch normalization or layer normalization or none")
+    flags.DEFINE_string("EMB_NORM", "LAYER", "Use batch normalization or layer normalization or none")
     flags.DEFINE_string("DEC_IN_NORM", "NONE", "Use batch normalization or layer normalization or none")
     flags.DEFINE_string("DEC_NORM", "NONE", "Use batch normalization or layer normalization or none")
     flags.DEFINE_float("BATCH_MOME", 0.99, "Momentum for the moving average")
