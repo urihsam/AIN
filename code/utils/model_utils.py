@@ -4,6 +4,7 @@ import os
 def set_flags():
     flags.DEFINE_bool("train", False, "Train and save the ATN model.")
     flags.DEFINE_bool("local", False, "Run this model locally or on the cloud")
+    flags.DEFINE_string("LBL_NAME", "Labeler", "The name of Label part")
     flags.DEFINE_string("ENC_NAME", "Encoder", "The name of Encoder part")
     flags.DEFINE_string("EMB_NAME", "Embedder", "The name of Embedder part")
     flags.DEFINE_string("DEC_NAME", "Decoder", "The name of Decoder part")
@@ -35,6 +36,7 @@ def set_flags():
     flags.DEFINE_integer("NUM_CHANNELS", 3, "Input depth dimension")
     # Training params
     flags.DEFINE_integer("NUM_EPOCHS", 1, "Number of epochs") # 200
+    flags.DEFINE_integer("NUM_PRE_EPOCHS", 2, "Number of epochs") # 200
     flags.DEFINE_integer("BATCH_SIZE", 128, "Size of training batches")# 128
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     flags.DEFINE_bool("load_AE", False, "Load AE from the last training result or not")
@@ -60,6 +62,10 @@ def set_flags():
     flags.DEFINE_float("GAMMA_V", 1e-4, "Coefficient for KL distance") # 1e-3
     ## Gamma for reconstruction loss
     flags.DEFINE_float("GAMMA_R", 1e-2, "Coefficient for reconstruction loss")
+    ## Gamma for label loss
+    flags.DEFINE_float("GAMMA_L", 1.0, "Coefficient for label loss")
+    ## Gamma for label loss
+    flags.DEFINE_float("GAMMA_PRE_L", 1.0, "Coefficient for label pre traini loss")
     ## loss x
     flags.DEFINE_string("PARTIAL_LOSS", "FULL_LOSS", "Use loss x or loss y") # FULL_LOSS, LOSS_X, LOSS_Y
     flags.DEFINE_integer("LOSS_CHANGE_FREQUENCY", 5, "The frequency of changing loss") # 5
