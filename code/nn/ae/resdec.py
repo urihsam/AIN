@@ -216,7 +216,7 @@ class RESDEC(ABCCNN):
 
         net = ne.brelu(net, self.output_low_bound, self.output_up_bound) # clipping the final result 
         net = tf.identity(net, name='output')
-        net = tf.reshape(net, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel])
+        # net = tf.reshape(net, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel])
         #import pdb; pdb.set_trace()
         return net
 

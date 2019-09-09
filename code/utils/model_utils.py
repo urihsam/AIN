@@ -37,8 +37,10 @@ def set_flags():
     # Training params
     flags.DEFINE_integer("NUM_EPOCHS", 1, "Number of epochs") # 200
     flags.DEFINE_integer("NUM_PRE_EPOCHS", 2, "Number of epochs") # 200
+    flags.DEFINE_integer("NUM_ACCUM_ITERS", 2, "Number of accumulation") # 2
     flags.DEFINE_integer("BATCH_SIZE", 128, "Size of training batches")# 128
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
+    flags.DEFINE_integer("PRE_EVAL_FREQUENCY", 1, "Frequency for pre evaluation") # 25
     flags.DEFINE_bool("load_AE", False, "Load AE from the last training result or not")
     flags.DEFINE_bool("early_stopping", False, "Use early stopping or not")
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
@@ -124,6 +126,8 @@ def set_flags():
     flags.DEFINE_float("LEARNING_RATE", 1e-4, "Learning rate of optimization")
     flags.DEFINE_float("LEARNING_DECAY_RATE", 0.99, "Decay rate of learning rate")
     flags.DEFINE_integer("LEARNING_DECAY_STEPS", int(2.5*1e3), "Decay steps of learning rate")
+    flags.DEFINE_bool("IS_GRAD_CLIPPING", False, "Use gradient clipping or not")
+    flags.DEFINE_float("GRAD_CLIPPING_NORM", 10.0, "Gradient clipping norm")
     # Non-linear func params
     flags.DEFINE_float("PIXEL_BOUND", 0.01, "Bound for pixel distance") # 0.01
     flags.DEFINE_float("BOUND_CHANGE_RATE", 0.8, "Bound change rate") # 0.8

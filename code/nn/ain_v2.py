@@ -12,6 +12,7 @@ import nn.ae.resdec as resdec
 import nn.embedder_v4 as embedder
 from utils.decorator import *
 from dependency import *
+import math
     
 
 class AIN:
@@ -56,7 +57,9 @@ class AIN:
 
                 # Class label autoencoder
                 with tf.variable_scope(FLAGS.LBL_NAME) as lbl_scope:
-                    img_shape = data.get_shape().as_list()[1:-1]+[1]
+                    row = data.get_shape().as_list()[1]
+                    col = int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
+                    img_shape = [row, col, 1]
                     size = np.prod(img_shape)
                     w1_shape = [label.get_shape().as_list()[-1], size]
                     w1 = ne.weight_variable(w1_shape, "lbl_W1", init_type="HE")
@@ -68,8 +71,12 @@ class AIN:
                     b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "lbl_b2")
                     self._recon_label = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
                     #
-                    self._label_states = tf.reshape(label_states, [-1] + img_shape)
-                    self._labeled_data= tf.concat([data, self._label_states], -1)
+                    self._label_states = []
+                    for _ in range(FLAGS.NUM_CHANNELS):
+                        self._label_states.append(tf.reshape(label_states, [-1] + img_shape))
+                    self._label_states = tf.concat(self._label_states, -1) # [B, 64, 4, 3]
+
+                    self._labeled_data= tf.concat([data, self._label_states], -2) #[B, 64, 68, 3]
                 self.lbl_scope = lbl_scope
 
                 # Encoder
@@ -86,7 +93,7 @@ class AIN:
                         out_channel_size=self.central_channel_size,
                         out_norm=FLAGS.ENC_OUT_NORM,
                         use_norm=FLAGS.ENC_NORM,
-                        img_channel=FLAGS.NUM_CHANNELS+1)
+                        img_channel=FLAGS.NUM_CHANNELS)
                     self._central_states = self._encoder.evaluate(self._labeled_data, self.is_training)
 
 
@@ -117,6 +124,10 @@ class AIN:
                         in_norm=FLAGS.DEC_IN_NORM,
                         use_norm=FLAGS.DEC_NORM)
                     self._generated_t = self._decoder_t.evaluate(self._central_embedded, self.is_training)
+                    self._generated_t = tf.reshape(self._generated_t, [-1, row, data.get_shape().as_list()[2]+col, data.get_shape().as_list()[3]])
+                    self._generated_t, self._generated_label_states = tf.split(self._generated_t, [data.get_shape().as_list()[2], col], -2)
+                    # self._generated_t = tf.reshape(self._generated_t, [-1, row, data.get_shape().as_list()[2], data.get_shape().as_list()[3]])
+                    
                 generated = self._generated_t + data
                 
                 if FLAGS.NORMALIZE:
@@ -332,12 +343,21 @@ class AIN:
 
 
     @lazy_property
-    def loss_label(self):
+    def pre_loss_label(self):
         cross_entropy = -tf.reduce_sum(
             self.label * tf.log(1e-5+self._recon_label) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label),
             axis = 1
         )
         return tf.reduce_mean(cross_entropy)
+
+    
+    @lazy_property
+    def loss_label_states(self):
+        squared_sum = tf.reduce_sum(
+            tf.square(self._label_states - self._generated_label_states),
+            axis = 1
+        )
+        return tf.reduce_mean(squared_sum)
     
 
     @lazy_method
@@ -345,7 +365,7 @@ class AIN:
         partial_loss_func = lambda: tf.cond(tf.equal(partial_loss, "LOSS_X"), lambda: loss_x, lambda: loss_y)
         loss = tf.cond(tf.equal(partial_loss, "FULL_LOSS"), lambda: loss_x + loss_y, partial_loss_func)
         recon_loss = FLAGS.GAMMA_R * self.loss_reconstruct
-        label_loss = FLAGS.GAMMA_L * self.loss_label
+        label_loss = FLAGS.GAMMA_L * self.loss_label_states
         loss += (recon_loss + label_loss)
         if FLAGS.SPARSE:
             sparse_loss = FLAGS.GAMMA_S * self._autoencoder.rho_distance(FLAGS.SPARSE_RHO)
@@ -375,7 +395,7 @@ class AIN:
 
 
     @lazy_method_no_scope
-    def optimization(self, loss, scope="OPT"):
+    def optimization(self, loss, accum_iters=1, scope="OPT"):
         with tf.variable_scope(scope):
             """
             decayed_learning_rate = learning_rate *
@@ -405,7 +425,33 @@ class AIN:
             elif FLAGS.OPT_TYPE == "ADAM":
                 optimizer = tf.train.AdamOptimizer(learning_rate)
             grads_and_vars = optimizer.compute_gradients(loss, var_list=opt_vars)
-            op = optimizer.apply_gradients(grads_and_vars)
+
+            gradients, variables = zip(*grads_and_vars)  # unzip list of tuples
+            # accumulate
+            if accum_iters != 1:
+                accum_grads = [tf.Variable(tf.zeros_like(var.initialized_value()), trainable=False) for var in variables]                                        
+                
+                zero_op = [grads.assign(tf.zeros_like(grads)) for grads in accum_grads]
+                accum_op = [accum_grads[i].assign_add(g) for i, g in enumerate(gradients) if g!= None]
+                avg_op = [grads.assign(grads/accum_iters) for grads in accum_grads]
+            else:
+                accum_grads = gradients
+            if FLAGS.IS_GRAD_CLIPPING:
+                """
+                https://www.tensorflow.org/api_docs/python/tf/clip_by_global_norm
+                clip_by_global_norm(t_list, clip_norm, use_norm=None, name=None)
+                t_list[i] * clip_norm / max(global_norm, clip_norm),
+                where global_norm = sqrt(sum([l2norm(t)**2 for t in t_list])
+                if clip_norm < global_norm, the gradients will be scaled to smaller values,
+                especially, if clip_norm == 1, the graidents will be normed
+                """
+                clipped_grads, global_norm = (
+                    #tf.clip_by_global_norm(gradients) )
+                    tf.clip_by_global_norm(accum_grads, clip_norm=FLAGS.GRAD_CLIPPING_NORM))
+                grads_and_vars = zip(clipped_grads, variables)
+            else:
+                grads_and_vars = zip(accum_grads, variables)
+            op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
             # tensorboard
             for g, v in grads_and_vars:
@@ -413,7 +459,10 @@ class AIN:
                 name = v.name.replace(":", "_")
                 tf.summary.histogram(name+"_gradients", g)
             tf.summary.scalar("Learning_rate", learning_rate)
-            return op
+            if accum_iters != 1:
+                return op, (zero_op, accum_op, avg_op), learning_rate
+            else:
+                return op, learning_rate
 
     @lazy_property
     def prediction(self):

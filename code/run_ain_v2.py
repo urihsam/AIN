@@ -281,8 +281,8 @@ def train():
         model = ain.AIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
 
         # pre-training
-        pre_label_loss = FLAGS.GAMMA_PRE_L * model.loss_label
-        pre_optimization = model.optimization(pre_label_loss, "PRE_OPT")
+        pre_label_loss = FLAGS.GAMMA_PRE_L * model.pre_loss_label
+        pre_op, _ = model.optimization(pre_label_loss, scope="PRE_OPT")
         # model training
         
         model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake), \
@@ -293,7 +293,7 @@ def train():
                         )
         model_loss, model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg = \
             model.loss(partial_loss_holder, model_loss_x, model_loss_y)
-        model_optimization = model.optimization(model_loss)
+        model_op, (model_zero_op,  model_accum_op, model_avg_op), model_lr = model.optimization(model_loss, accum_iters=FLAGS.NUM_ACCUM_ITERS)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -328,9 +328,11 @@ def train():
         
         if FLAGS.local:
             total_train_batch = 2
+            total_pre_train_batch = 2
             total_valid_batch = 2
         else:
-            total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
+            total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE/FLAGS.NUM_ACCUM_ITERS)
+            total_pre_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
             total_valid_batch = None
         
         min_adv_acc = np.Inf
@@ -339,15 +341,15 @@ def train():
         print("Pre-training...")
         for epoch in range(FLAGS.NUM_PRE_EPOCHS):
             start_time = time.time()
-            for train_idx in range(total_train_batch):
+            for train_idx in range(total_pre_train_batch):
                 batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
                 feed_dict = {
                     label_holder: batch_ys,
                     is_training: True
                 }
-                fetches = [pre_optimization, pre_label_loss]
+                fetches = [pre_op, pre_label_loss]
                 _, pre_loss = sess.run(fetches=fetches, feed_dict=feed_dict)
-                if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
+                if train_idx % FLAGS.PRE_EVAL_FREQUENCY == (FLAGS.PRE_EVAL_FREQUENCY - 1):
                     print("Result:")
                     print("Pre Loss label = {:.4f}".format(pre_loss,))
                     print()
@@ -356,29 +358,33 @@ def train():
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
             for train_idx in range(total_train_batch):
-                batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
-                feed_dict = {
-                    images_holder: batch_xs,
-                    label_holder: batch_ys,
-                    low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
-                    up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
-                    epsilon_holder: FLAGS.EPSILON,
-                    beta_x_t_holder: FLAGS.BETA_X_TRUE,
-                    beta_x_f_holder: FLAGS.BETA_X_FAKE,
-                    beta_y_t_holder: FLAGS.BETA_Y_TRANS,
-                    beta_y_f_holder: FLAGS.BETA_Y_FAKE,
-                    beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
-                    kappa_t_holder: FLAGS.KAPPA_FOR_TRANS,
-                    kappa_f_holder: FLAGS.KAPPA_FOR_FAKE,
-                    kappa_c_holder: FLAGS.KAPPA_FOR_CLEAN,
-                    is_training: True,
-                    partial_loss_holder: FLAGS.PARTIAL_LOSS
-                }
+                for accum_idx in range(FLAGS.NUM_ACCUM_ITERS):
+                    batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
+
+                    feed_dict = {
+                        images_holder: batch_xs,
+                        label_holder: batch_ys,
+                        low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
+                        up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
+                        epsilon_holder: FLAGS.EPSILON,
+                        beta_x_t_holder: FLAGS.BETA_X_TRUE,
+                        beta_x_f_holder: FLAGS.BETA_X_FAKE,
+                        beta_y_t_holder: FLAGS.BETA_Y_TRANS,
+                        beta_y_f_holder: FLAGS.BETA_Y_FAKE,
+                        beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
+                        kappa_t_holder: FLAGS.KAPPA_FOR_TRANS,
+                        kappa_f_holder: FLAGS.KAPPA_FOR_FAKE,
+                        kappa_c_holder: FLAGS.KAPPA_FOR_CLEAN,
+                        is_training: True,
+                        partial_loss_holder: FLAGS.PARTIAL_LOSS
+                    }
+                    sess.run(fetches=[model_accum_op], feed_dict=feed_dict)
+                sess.run(fetches=[model_avg_op])
                 """[res0, res1, res2] = sess.run([model.adv, model.fake, model.cross_entropy],
                                         feed_dict=feed_dict)
                 import pdb; pdb.set_trace()"""
                 # optimization
-                fetches = [model_optimization, model_loss, 
+                fetches = [model_op, model_loss, 
                         model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg, 
                         model_loss_x, model_lx_true, model_lx_fake, 
                         model_lx_dist_true, model_lx_dist_fake,
@@ -452,7 +458,7 @@ def train():
             valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=total_valid_batch, valid=True)
             
 
-            if valid_dict["adv_acc"] > 0.1:
+            if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1:
                 break
             else:
                 model.tf_save(sess)
