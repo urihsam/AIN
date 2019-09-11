@@ -29,7 +29,8 @@ class RESENC(ABCCNN):
                  img_channel=None,
                  # switch
                  out_norm = None,
-                 use_norm = None
+                 use_norm = None,
+                 use_class_label = False
                 ):
         # conv layers
         if isinstance(conv_filter_sizes[0], list):
@@ -80,6 +81,7 @@ class RESENC(ABCCNN):
         # switch
         self.out_norm = out_norm
         self.use_norm = use_norm
+        self.use_class_label = use_class_label
 
 
         self.conv_filters, self.conv_biases, self.num_conv = self.conv_weights_biases()
@@ -110,6 +112,8 @@ class RESENC(ABCCNN):
     @lazy_method
     def out_weight_bias(self):
         in_size = self.out_state
+        if self.use_class_label:
+            in_size += FLAGS.LBL_STATES_SIZE
         state_size = self.out_fc_states
         W, b, _ = self._fc_weights_biases("W_out_", "b_out_", in_size, state_size, init_type="XV_1")
         return W, b
@@ -174,11 +178,13 @@ class RESENC(ABCCNN):
     
 
     @lazy_method
-    def out_layer(self, inputs, W_name="W_out_", b_name="b_out_"):
+    def out_layer(self, inputs, label=None, W_name="W_out_", b_name="b_out_"):
         net = inputs
         h, w, c = net.get_shape().as_list()[1:]
         assert h*w*c == self.out_state
         net = tf.reshape(net, [-1, self.out_state])
+        if self.use_class_label:
+            net = tf.concat([net, label], -1)
         
         for layer_id in range(len(self.out_fc_states)):
             weight_name = "{}{}".format(W_name, layer_id)
@@ -204,11 +210,11 @@ class RESENC(ABCCNN):
 
 
     @lazy_method
-    def evaluate(self, data, is_training):
+    def evaluate(self, data, is_training, label=None):
         self.is_training = is_training
         conv_res = self.conv_res_groups(data)
         #assert res.get_shape().as_list()[1:] == self.res_out_shape
-        out = self.out_layer(conv_res)
+        out = self.out_layer(conv_res, label)
         return out
 
 

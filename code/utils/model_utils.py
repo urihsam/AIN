@@ -31,6 +31,7 @@ def set_flags():
     flags.DEFINE_bool("NORMALIZE", True, "Data is normalized to [0, 1]")
     flags.DEFINE_bool("BIASED", False, "Data is shifted to [-1, 1]")
     flags.DEFINE_integer("NUM_CLASSES", 200, "Number of classification classes")
+    flags.DEFINE_integer("LBL_STATES_SIZE", 256, "Size of label states")
     flags.DEFINE_integer("IMAGE_ROWS", 64, "Input row dimension")
     flags.DEFINE_integer("IMAGE_COLS", 64, "Input column dimension")
     flags.DEFINE_integer("NUM_CHANNELS", 3, "Input depth dimension")
