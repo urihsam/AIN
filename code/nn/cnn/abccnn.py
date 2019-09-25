@@ -43,7 +43,7 @@ class ABCCNN(ABC):
         self.use_norm = use_norm
 
 
-    def _conv_weights_biases(self, W_name, b_name, filter_sizes, in_channel, channel_sizes, transpose=False, init_type="CONV"):
+    def _conv_weights_biases(self, W_name, b_name, filter_sizes, in_channel, channel_sizes, transpose=False, init_type="XV_1", no_bias=False):
         num_layer = len(channel_sizes)
         _weights = {}
         _biases = {}
@@ -54,21 +54,22 @@ class ABCCNN(ABC):
             else:
                 W_shape = filter_sizes[idx]+[in_channel, channel_sizes[idx]]
             _weights[W_key] = ne.weight_variable(W_shape, name=W_key, init_type=init_type)
-
-            b_key = "{}{}".format(b_name, idx)
-            b_shape = [channel_sizes[idx]]
-            _biases[b_key] = ne.bias_variable(b_shape, name=b_key)
+            if no_bias == False:
+                b_key = "{}{}".format(b_name, idx)
+                b_shape = [channel_sizes[idx]]
+                _biases[b_key] = ne.bias_variable(b_shape, name=b_key)
 
             in_channel = channel_sizes[idx]
 
             # tensorboard
             tf.summary.histogram("Filter_"+W_key, _weights[W_key])
-            tf.summary.histogram("Bias_"+b_key, _biases[b_key])
+            if no_bias == False:
+                tf.summary.histogram("Bias_"+b_key, _biases[b_key])
 
         return _weights, _biases, num_layer
 
 
-    def _fc_weights_biases(self, W_name, b_name, in_size, state_sizes, init_type="HE", sampling=False):
+    def _fc_weights_biases(self, W_name, b_name, in_size, state_sizes, init_type="HE", sampling=False, no_bias=False):
         num_layer = len(state_sizes)
         _weights = {}
         _biases = {}
@@ -77,15 +78,17 @@ class ABCCNN(ABC):
             W_shape = [in_size, out_size]
             _weights[W_key] = ne.weight_variable(W_shape, name=W_key, init_type=init_type)
 
-            b_key = "{}{}{}".format(b_name, idx, postfix)
-            b_shape = [out_size]
-            _biases[b_key] = ne.bias_variable(b_shape, name=b_key)
+            if no_bias == False:
+                b_key = "{}{}{}".format(b_name, idx, postfix)
+                b_shape = [out_size]
+                _biases[b_key] = ne.bias_variable(b_shape, name=b_key)
 
             in_size = out_size
 
             # tensorboard
             tf.summary.histogram("Weight_"+W_key, _weights[W_key])
-            tf.summary.histogram("Bias_"+b_key, _biases[b_key])
+            if no_bias == False:
+                tf.summary.histogram("Bias_"+b_key, _biases[b_key])
             
             return in_size
         

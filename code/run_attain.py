@@ -1,4 +1,4 @@
-import nn.ain as ain
+import nn.attain as attain
 import os
 from tensorflow.examples.tutorials.mnist import input_data
 from PIL import Image
@@ -28,10 +28,10 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
         model.loss_y(graph_dict["beta_y_t_holder"], graph_dict["beta_y_f_holder"], graph_dict["beta_y_c_holder"],
                      graph_dict["kappa_t_holder"], graph_dict["kappa_f_holder"], graph_dict["kappa_c_holder"]
                     )
-    model_loss, model_recon_loss, model_sparse_loss, model_var_loss, model_reg = \
+    model_loss, model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg = \
         model.loss(graph_dict["partial_loss_holder"], model_loss_x, model_loss_y)
     fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, 
-            model_loss, model_recon_loss, model_sparse_loss, model_var_loss, model_reg, 
+            model_loss, model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg, 
             model_loss_x, model_lx_true, model_lx_fake, 
             model_lx_dist_true, model_lx_dist_fake,
             model_max_dist_true, model_max_dist_fake,
@@ -46,11 +46,12 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     else: total_batch = total_batch
 
     acc = 0; adv_acc = 0; fake_acc = 0; 
-    loss = 0; recon_loss = 0; sparse_loss = 0; var_loss = 0; reg = 0;
+    loss = 0; recon_loss = 0; label_loss = 0; sparse_loss = 0; var_loss = 0; reg = 0;
     l_x = 0; Lx_true = 0; Lx_fake = 0; Lx_dist_true = 0; Lx_dist_fake = 0;
     max_dist_true = 0; max_dist_fake = 0;
     l_y = 0; Ly_trans = 0; Ly_fake = 0; Ly_clean = 0; 
     Ly_dist_trans = 0; Ly_dist_fake = 0; Ly_dist_clean = 0
+    
     for idx in range(total_batch):
         if valid:
             batch_xs, batch_ys = data.next_valid_batch(FLAGS.BATCH_SIZE)
@@ -75,7 +76,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
             graph_dict["is_training"]: False
         }
         
-        batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_recon_loss, batch_sparse_loss, batch_var_loss, batch_reg, \
+        batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_recon_loss, batch_label_loss, batch_sparse_loss, batch_var_loss, batch_reg, \
             batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, \
             batch_max_dist_true, batch_max_dist_fake, \
             batch_l_y, batch_Ly_trans, batch_Ly_fake, batch_Ly_clean,\
@@ -87,6 +88,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
         fake_acc += batch_fake_acc
         loss += batch_loss
         recon_loss += batch_recon_loss
+        label_loss += batch_label_loss
         sparse_loss += batch_sparse_loss
         var_loss += batch_var_loss
         reg += batch_reg
@@ -110,6 +112,7 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     fake_acc /= total_batch
     loss /= total_batch
     recon_loss /= total_batch
+    label_loss /= total_batch
     sparse_loss /= total_batch
     var_loss /= total_batch
     reg /= total_batch
@@ -132,8 +135,8 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
     print('Original accuracy: {0:0.5f}'.format(acc))
     print('Faked accuracy: {0:0.5f}'.format(fake_acc))
     print('Attacked accuracy: {0:0.5f}'.format(adv_acc))
-    print("Loss = {:.4f}  Loss recon = {:.4f}  Loss sparse = {:.4f}  Loss var = {:.4f}  Loss reg = {:.4f}".format(
-        loss, recon_loss, sparse_loss, var_loss, reg))
+    print("Loss = {:.4f}  Loss recon = {:.4f}  Loss label = {:.4f} Loss sparse = {:.4f}  Loss var = {:.4f}  Loss reg = {:.4f}".format(
+        loss, recon_loss, label_loss, sparse_loss, var_loss, reg))
     print("Loss x = {:.4f}  Loss y = {:.4f}".format(l_x, l_y))
     print("Loss x for true = {:.4f} Loss x for fake = {:.4}".format(Lx_true, Lx_fake))
     print("Loss y for trans = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_trans, Ly_fake, Ly_clean))
@@ -145,6 +148,8 @@ def test_info(sess, model, test_writer, graph_dict, total_batch=None, valid=Fals
                 "fake_acc": fake_acc,
                 "adv_acc": adv_acc, 
                 "loss": loss, 
+                "recon_loss": recon_loss,
+                "label_loss": label_loss,
                 "sparse_loss": sparse_loss,
                 "var_loss": var_loss,
                 "l_x": l_x,
@@ -190,7 +195,7 @@ def test():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = ain.AIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
+        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -274,14 +279,20 @@ def train():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
         # model
-        model = ain.AIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
+        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
+
+        # pre-training
+        pre_label_loss = FLAGS.GAMMA_PRE_L * model.pre_loss_label
+        pre_op, _, _ = model.optimization(pre_label_loss, scope="PRE_OPT")
+        # model training
+        
         model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake), \
             (model_max_dist_true, model_max_dist_fake) = model.loss_x(beta_x_t_holder, beta_x_f_holder)
         model_loss_y, (model_ly_trans, model_ly_fake, model_ly_clean), (model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean) =\
             model.loss_y(beta_y_t_holder, beta_y_f_holder, beta_y_c_holder,
                          kappa_t_holder, kappa_f_holder, kappa_c_holder
                         )
-        model_loss, model_recon_loss, model_sparse_loss, model_var_loss, model_reg = \
+        model_loss, model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg = \
             model.loss(partial_loss_holder, model_loss_x, model_loss_y)
         model_op, (model_zero_op,  model_accum_op, model_avg_op), model_lr = model.optimization(model_loss, accum_iters=FLAGS.NUM_ACCUM_ITERS)
         merged_summary = tf.summary.merge_all()
@@ -318,21 +329,62 @@ def train():
         
         if FLAGS.local:
             total_train_batch = 2
+            total_pre_train_batch = 2
             total_valid_batch = 2
         else:
             total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE/FLAGS.NUM_ACCUM_ITERS)
+            total_pre_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
             total_valid_batch = None
         
         min_adv_acc = np.Inf
         alert_count = 0
+
+        print("Pre-training...")
+        for epoch in range(FLAGS.NUM_PRE_EPOCHS):
+            start_time = time.time()
+            for train_idx in range(total_pre_train_batch):
+                batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
+                feed_dict = {
+                    label_holder: batch_ys,
+                    is_training: True
+                }
+                fetches = [pre_op, pre_label_loss]
+                _, pre_loss = sess.run(fetches=fetches, feed_dict=feed_dict)
+                if train_idx % FLAGS.PRE_EVAL_FREQUENCY == (FLAGS.PRE_EVAL_FREQUENCY - 1):
+                    print("Result:")
+                    print("Pre Loss label = {:.4f}".format(pre_loss,))
+                    print()
         
         print("Training...")
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
             for train_idx in range(total_train_batch):
-                for accum_idx in range(FLAGS.NUM_ACCUM_ITERS):
-                    batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
+                if FLAGS.NUM_ACCUM_ITERS != 1:
+                    for accum_idx in range(FLAGS.NUM_ACCUM_ITERS):
+                        batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
 
+                        feed_dict = {
+                            images_holder: batch_xs,
+                            label_holder: batch_ys,
+                            low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
+                            up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
+                            epsilon_holder: FLAGS.EPSILON,
+                            beta_x_t_holder: FLAGS.BETA_X_TRUE,
+                            beta_x_f_holder: FLAGS.BETA_X_FAKE,
+                            beta_y_t_holder: FLAGS.BETA_Y_TRANS,
+                            beta_y_f_holder: FLAGS.BETA_Y_FAKE,
+                            beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
+                            kappa_t_holder: FLAGS.KAPPA_FOR_TRANS,
+                            kappa_f_holder: FLAGS.KAPPA_FOR_FAKE,
+                            kappa_c_holder: FLAGS.KAPPA_FOR_CLEAN,
+                            is_training: True,
+                            partial_loss_holder: FLAGS.PARTIAL_LOSS
+                        }
+                        sess.run(fetches=[model_accum_op], feed_dict=feed_dict)
+                    sess.run(fetches=[model_avg_op])
+                
+                else:
+                    batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
                     feed_dict = {
                         images_holder: batch_xs,
                         label_holder: batch_ys,
@@ -350,27 +402,32 @@ def train():
                         is_training: True,
                         partial_loss_holder: FLAGS.PARTIAL_LOSS
                     }
-                    sess.run(fetches=[model_accum_op], feed_dict=feed_dict)
-                sess.run(fetches=[model_avg_op])
+                """[res0, res1, res2] = sess.run([model.adv, model.fake, model.cross_entropy],
+                                        feed_dict=feed_dict)
+                import pdb; pdb.set_trace()"""
                 # optimization
                 fetches = [model_op, model_loss, 
-                        model_recon_loss, model_sparse_loss, model_var_loss, model_reg, 
+                        model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg, 
                         model_loss_x, model_lx_true, model_lx_fake, 
                         model_lx_dist_true, model_lx_dist_fake,
                         model_max_dist_true, model_max_dist_fake,
                         model_loss_y, model_ly_trans, model_ly_fake, model_ly_clean, 
                         model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean,
-                        merged_summary, model._target_fake_prediction]
-                _, loss, recon_loss, sparse_loss, var_loss, reg, l_x, Lx_true, Lx_fake, Lx_dist_true, Lx_dist_fake, \
+                        merged_summary, model._target_fake_prediction,
+                        model_lr, model._encoder.att_gamma, model._decoder_t.att_gamma]
+                _, loss, recon_loss, label_loss, sparse_loss, var_loss, reg, l_x, Lx_true, Lx_fake, Lx_dist_true, Lx_dist_fake, \
                     max_dist_true, max_dist_fake, l_y, Ly_trans, Ly_fake, Ly_clean, \
                     Ly_dist_trans, Ly_dist_fake, Ly_dist_clean, \
-                    summary, fake_prediction = sess.run(fetches=fetches, feed_dict=feed_dict)
+                    summary, fake_prediction,\
+                    lr, enc_att_gamma, dec_att_gamma = sess.run(fetches=fetches, feed_dict=feed_dict)
                 
                 #import pdb; pdb.set_trace()
                 train_writer.add_summary(summary, train_idx)
                 # Print info
                 if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
                     print("Epoch: {}".format(epoch+1))
+                    print("Learning rate: {}".format(lr))
+                    print("Enc Att Gamma: {} ; Dec Att Gamma: {}".format(enc_att_gamma, dec_att_gamma))
                     print("Hyper-params info:")
                     print("Using Partial Loss:", FLAGS.PARTIAL_LOSS)
                     print("Pixel bound: [{:.4f}, {:.4f}]  Epsilon: {:.4f}".format(
@@ -379,8 +436,8 @@ def train():
                         FLAGS.BETA_X_TRUE, FLAGS.BETA_X_FAKE, FLAGS.BETA_Y_TRANS, FLAGS.BETA_Y_FAKE, FLAGS.BETA_Y_CLEAN
                     ))
                     print("Result:")
-                    print("Loss = {:.4f}  Loss recon = {:.4f}  Loss sparse = {:.4f}  Loss var = {:.4f}  Loss reg = {:.4f}".format(
-                        loss, recon_loss, sparse_loss, var_loss, reg))
+                    print("Loss = {:.4f}  Loss recon = {:.4f}  Loss label = {:.4f}  Loss sparse = {:.4f}  Loss var = {:.4f}  Loss reg = {:.4f}".format(
+                        loss, recon_loss, label_loss, sparse_loss, var_loss, reg))
                     print("Loss x = {:.4f}  Loss y = {:.4f}".format(l_x, l_y))
                     print("Loss x for true = {:.4f} Loss x for fake = {:.4}".format(Lx_true, Lx_fake))
                     print("Loss y for trans = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_trans, Ly_fake, Ly_clean))
@@ -427,7 +484,7 @@ def train():
             valid_dict = test_info(sess, model, valid_writer, graph_dict, total_batch=total_valid_batch, valid=True)
             
 
-            if valid_dict["adv_acc"] > 0.1:
+            if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1:
                 break
             else:
                 model.tf_save(sess)

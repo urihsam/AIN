@@ -76,7 +76,7 @@ class AIN:
                         self._label_states.append(tf.reshape(label_states, [-1] + img_shape))
                     self._label_states = tf.concat(self._label_states, -1) # [B, 64, 4, 3]
 
-                    self._labeled_data= tf.concat([data, self._label_states], -2) #[B, 64, 68, 3]
+                    self._labeled_data= tf.concat([data*self.output_up_bound, self._label_states], -2) #[B, 64, 68, 3]
                 self.lbl_scope = lbl_scope
 
                 # Encoder

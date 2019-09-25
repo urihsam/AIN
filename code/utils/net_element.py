@@ -2,7 +2,16 @@ import tensorflow as tf
 from dependency import *
 
 
-def weight_variable(shape, name, init_type="CONV"):
+def flatten(x):
+    size = np.prod(x.get_shape().as_list()[1:])
+    return tf.reshape(x, shape=[tf.shape(x)[0], size])
+
+def hw_flatten(x):
+    size = np.prod(x.get_shape().as_list()[1:-1])
+    return tf.reshape(x, shape=[tf.shape(x)[0], size, x.get_shape().as_list()[-1]])
+
+
+def weight_variable(shape, name, init_type="XV_1"):
     """
     """
     if init_type == "HE":
@@ -44,9 +53,9 @@ def param_relu(x, prelu_alpha):
     with tf.variable_scope("PARAM_RELU"):
         return tf.maximum(0.0, x) + prelu_alpha * tf.minimum(0.0, x)
 
-def brelu(x, low_bound=0, up_bound=1):
+def brelu(x, low_bound=0, up_bound=1, beta=1.0):
     with tf.variable_scope("BRELU"):
-        return tf.minimum(tf.maximum(low_bound*1.0, x), up_bound*1.0)
+        return tf.minimum(tf.maximum(low_bound*1.0, beta*x), up_bound*1.0)
 
 def leaky_brelu(x, alpha=0.2, low_bound=0, up_bound=1):
     with tf.variable_scope("LEAKY_BRELU"):
@@ -85,24 +94,32 @@ def drop_out(x, drop_rate, is_training):
 def conv2d(x, filters, biases, strides, padding):
     """
     """
-    return tf.nn.conv2d(x, filters, strides=[1, strides[0], strides[1], 1], padding=padding)+ biases
+    if biases == None:
+        return tf.nn.conv2d(x, filters, strides=[1, strides[0], strides[1], 1], padding=padding)
+    else:
+        return tf.nn.conv2d(x, filters, strides=[1, strides[0], strides[1], 1], padding=padding)+ biases
 
 
 def conv2d_transpose(x, filters, biases, strides, padding):
     """
     """
-    shapes = tf.shape(x)
+    shapes = [tf.shape(x)[0]] + x.get_shape().as_list()[1:]
     #shapes = tf.stack([shapes[0], shapes[1]*2, shapes[2]*2, tf.shape(biases)[0]])
-    shapes = tf.stack([shapes[0], shapes[1]*strides[0], shapes[2]*strides[1], tf.shape(biases)[0]])
+    shapes = tf.stack([shapes[0], shapes[1]*strides[0], shapes[2]*strides[1], filters.get_shape().as_list()[-2]])
     #output_shape = [tf.shape(x)[0]] + out_dim + [filters.get_shape().as_list()[-2]]
     #output_shape[1] *= 2
     #output_shape[2] *= 2
     #import pdb; pdb.set_trace()
-    return tf.nn.conv2d_transpose(x, filters, output_shape=shapes, strides=[1, strides[0], strides[1], 1], padding=padding) + biases
+    if biases == None:
+        net = tf.nn.conv2d_transpose(x, filters, output_shape=shapes, strides=[1, strides[0], strides[1], 1], padding=padding)
+    else:
+        net = tf.nn.conv2d_transpose(x, filters, output_shape=shapes, strides=[1, strides[0], strides[1], 1], padding=padding) + biases
+    
+    return net
 
 
-def max_pool_2x2(x):
+def max_pool_2x2(x, ksize=2, stride=2):
     """
     """
-    return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
-                          strides=[1, 1, 1, 1], padding='SAME')
+    return tf.nn.max_pool(x, ksize=[1, ksize, ksize, 1],
+                          strides=[1, stride, stride, 1], padding='SAME')

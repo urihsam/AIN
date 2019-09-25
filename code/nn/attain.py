@@ -5,19 +5,19 @@ import nn.vcae as vcae
 import nn.vcae_new as vcae_new
 import nn.cavcae as cavcae
 import nn.resnet as resnet
-import nn.ae.resenc_v2 as resenc
-import nn.ae.resdec_v2 as resdec
+import nn.ae.attresenc as attresenc
+import nn.ae.attresdec as attresdec
 #import nn.embedder_v2 as embedder
 #import nn.embedder_v3 as embedder
-import nn.embedder_v4 as embedder
+import nn.embedder as embedder
 from utils.decorator import *
 from dependency import *
 import math
     
 
-class AIN:
+class ATTAIN:
     """
-    Adversarial Imitation Network
+    Attentive Adversarial Imitation Network
     """
 
     def __init__(self, data, label, low_bound, up_bound, attack_epsilon, is_training):
@@ -25,129 +25,103 @@ class AIN:
         self.label = label
         self.output_low_bound = low_bound
         self.output_up_bound = up_bound
-        self.central_g_emb_size = FLAGS.G_EMB_SIZE
-        self.central_d_emb_size = FLAGS.D_EMB_SIZE
+        self.central_emb_size = FLAGS.EMB_SIZE
         self.central_channel_size = FLAGS.CENTRAL_CHANNEL_SIZE
         self.attack_epsilon = attack_epsilon
         self.is_training = is_training
 
         with tf.variable_scope('autoencoder'):
-            if FLAGS.AE_TYPE == "VGAUSS":
-                print("Using Variational Convolutional Autoencoder with Gauss")
-                FLAGS.VARI = True
-                self._autoencoder = vcae_new.VCAE(vtype="gauss",
-                                                  output_low_bound=self.output_low_bound, 
-                                                  output_up_bound=self.output_up_bound,
-                                                  nonlinear_low_bound = self.output_low_bound/2.0,
-                                                  nonlinear_up_bound = self.output_up_bound/2.0,
-                                                  central_state_size = FLAGS.BOTTLENECK
-                                                 )
-                self._autoencoder_prediction = self._autoencoder.prediction(self.data, self.is_training)
-            
-            elif FLAGS.AE_TYPE == "TRAD":
-                print("Using Convolutional Autoencoder")
-                self._autoencoder = cae.CAE(output_low_bound=self.output_low_bound, 
-                                            output_up_bound=self.output_up_bound,
-                                            nonlinear_low_bound = self.output_low_bound/2.0,
-                                            nonlinear_up_bound = self.output_up_bound/2.0,
-                                            central_state_size = FLAGS.BOTTLENECK
-                                           )
-                self._autoencoder_prediction = self._autoencoder.prediction(self.data, self.is_training)
-            elif FLAGS.AE_TYPE == "EMBAE":
+            if FLAGS.AE_TYPE == "ATTAE":
                 
                 # Class label autoencoder
                 with tf.variable_scope(FLAGS.LBL_NAME) as lbl_scope:
-                    fc_size = FLAGS.LBL_STATES_SIZE
-                    fc_w1_shape = [label.get_shape().as_list()[-1], fc_size]
-                    fc_w1 = ne.weight_variable(fc_w1_shape, "lbl_fc_W1", init_type="HE")
-                    fc_b1 = ne.bias_variable([fc_size], "lbl_fc_b1")
-                    self._fc_label_states = ne.leaky_relu(ne.fully_conn(label, fc_w1, fc_b1))
-                    #
-                    fc_w2_shape = [fc_size, label.get_shape().as_list()[-1]]
-                    fc_w2 = ne.weight_variable(fc_w2_shape, "lbl_fc_W2", init_type="HE")
-                    fc_b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "lbl_fc_b2")
-                    self._fc_recon_label = ne.sigmoid(ne.fully_conn(self._fc_label_states , fc_w2, fc_b2))
-
-                    ###
-                    row = data.get_shape().as_list()[1]
-                    col = int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
-                    img_shape = [row, col, 1]
+                    row = self.data.get_shape().as_list()[1]#data.get_shape().as_list()[1]
+                    col = self.data.get_shape().as_list()[2]#int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
+                    cha = self.data.get_shape().as_list()[3]
+                    img_shape = [row, col, cha]
                     size = np.prod(img_shape)
                     w1_shape = [label.get_shape().as_list()[-1], size]
                     w1 = ne.weight_variable(w1_shape, "lbl_W1", init_type="HE")
                     b1 = ne.bias_variable([size], "lbl_b1")
-                    label_states = ne.leaky_relu(ne.fully_conn(label, w1, b1))
+                    label_states = ne.sigmoid(ne.fully_conn(label, w1, b1))
                     #
                     w2_shape = [size, label.get_shape().as_list()[-1]]
                     w2 = ne.weight_variable(w2_shape, "lbl_W2", init_type="HE")
                     b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "lbl_b2")
                     self._recon_label = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
                     #
+                    '''
                     self._label_states = []
+                    
                     for _ in range(FLAGS.NUM_CHANNELS):
                         self._label_states.append(tf.reshape(label_states, [-1] + img_shape))
                     self._label_states = tf.concat(self._label_states, -1) # [B, 64, 4, 3]
+                    '''
+                    self._label_states = tf.reshape(label_states, [-1] + img_shape)
+                    self.labeled_data = tf.multiply(self.data, self._label_states)
+                    #self.labeled_data = tf.concat([self.labeled_data, self._label_states], -1)
+                    
 
-                    self._labeled_data= tf.concat([data*self.output_up_bound, self._label_states], -2) #[B, 64, 68, 3]
+                    #self._labeled_data= tf.concat([data, self._label_states], -2) #[B, 64, 68, 3]
+                    #self._labeled_central_states= tf.concat([self._central_states, self._label_states], -1)
                 self.lbl_scope = lbl_scope
+
 
                 # Encoder
                 with tf.variable_scope(FLAGS.ENC_NAME) as enc_scope:
-                    self._encoder = resenc.RESENC(
+                    self._encoder = attresenc.ATTRESENC(
+                        attention_type=FLAGS.ATT_TYPE,
+                        att_pos_idx=0,
+                        att_f_channel_size = 64,
+                        att_g_channel_size = 64,
+                        att_h_channel_size = 64,
                         conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3]],
-                        conv_strides = [[2,2], [1,1], [2,2],[1,1]], 
-                        conv_channel_sizes=[64, 256, 512, FLAGS.CENTRAL_CHANNEL_SIZE], 
+                        conv_strides = [[2,2], [1,1], [2,2], [1,1]], 
+                        conv_channel_sizes=[64, 256, 512, 1024], 
                         conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2],
                         num_res_block=FLAGS.NUM_ENC_RES_BLOCK,
                         res_block_size=FLAGS.ENC_RES_BLOCK_SIZE,
                         res_filter_sizes=[1,1],
                         res_leaky_ratio=0.2,
-                        out_state=17*16*FLAGS.CENTRAL_CHANNEL_SIZE,
-                        out_fc_states=[816],
-                        out_leaky_ratio=0.2,
+                        out_channel_size=self.central_channel_size,
                         out_norm=FLAGS.ENC_OUT_NORM,
                         use_norm=FLAGS.ENC_NORM,
-                        img_channel=FLAGS.NUM_CHANNELS,
-                        use_class_label=True)
-                    self._central_states = self._encoder.evaluate(self._labeled_data, 
-                                                                  self.is_training, 
-                                                                  self._fc_label_states)
-
-
+                        img_channel=FLAGS.NUM_CHANNELS)
+                    self._central_states = self._encoder.evaluate(self.labeled_data, self.is_training)
                 
+                '''
                 # Embedder
                 with tf.variable_scope(FLAGS.EMB_NAME) as emb_scope:
-                    self._embedder = embedder.EMBEDDER(
-                                                    emb_shape=self._central_states.get_shape().as_list()[1:], 
-                                                    g_emb_size=self.central_g_emb_size,
-                                                    d_emb_size=self.central_d_emb_size,
-                                                    emb_norm=FLAGS.EMB_NORM,
-                                                    emb_type=FLAGS.EMB_TYPE)
-                    self._central_embedded, self.g_coef = self._embedder.evaluate(self._central_states, self.is_training)
-                
-
+                    self._dec_embedder = embedder.EMBEDDER(self._central_states.get_shape().as_list()[1:], 
+                                                    [self.central_emb_size],
+                                                    emb_norm=FLAGS.EMB_NORM)
+                    self._central_embedded, self._embed_k_vs, self._embed_k_coefs =\
+                        self._dec_embedder.evaluate(self._central_states, self.is_training, res_start=1)
+                '''
 
                 # Decoder
                 with tf.variable_scope(FLAGS.DEC_NAME) as dec_scope:
-                    self._decoder_t = resdec.RESDEC(
+                    self._decoder_t = attresdec.ATTRESDEC(
                         self.output_low_bound, self.output_up_bound,
+                        attention_type=FLAGS.ATT_TYPE,
+                        att_pos_idx=-1,
+                        att_f_channel_size = 64,
+                        att_g_channel_size = 64,
+                        att_h_channel_size = 64,
                         decv_filter_sizes=[[3,3], [4,4], [3,3], [4,4]],
                         decv_strides = [[1,1], [2,2], [1,1], [2,2]], 
-                        decv_channel_sizes=[FLAGS.CENTRAL_CHANNEL_SIZE, 512, 256, 64], 
+                        decv_channel_sizes=[1024, 512, 256, 64], 
                         decv_leaky_ratio=[0.2, 0.2, 0.2, 0.2],
                         num_res_block=FLAGS.NUM_DEC_RES_BLOCK,
                         res_block_size=FLAGS.DEC_RES_BLOCK_SIZE,
                         res_filter_sizes=[1,1],
                         res_leaky_ratio=0.2,
-                        in_state=816,
-                        in_fc_states=[16*17*FLAGS.CENTRAL_CHANNEL_SIZE],
-                        in_leaky_ratio=0.2,
+                        in_channel_size=self.central_channel_size,
                         in_norm=FLAGS.DEC_IN_NORM,
                         use_norm=FLAGS.DEC_NORM)
-                    self._generated_t = self._decoder_t.evaluate(self._central_embedded, self.is_training)
-                    self._generated_t = tf.reshape(self._generated_t, [-1, row, data.get_shape().as_list()[2]+col, data.get_shape().as_list()[3]])
-                    self._generated_t, self._generated_label_states = tf.split(self._generated_t, [data.get_shape().as_list()[2], col], -2)
-                    # self._generated_t = self._decoder_t.evaluate(self._central_states, self.is_training)
+                    self._generated_t = self._decoder_t.evaluate(self._central_states, self.is_training)
+                    #self._generated_t = tf.reshape(self._generated_t, [-1, row, data.get_shape().as_list()[2]+col, data.get_shape().as_list()[3]])
+                    #self._generated_t, self._generated_label_states = tf.split(self._generated_t, [data.get_shape().as_list()[2], col], -2)                
                 generated = self._generated_t + data
                 
                 if FLAGS.NORMALIZE:
@@ -368,14 +342,9 @@ class AIN:
             self.label * tf.log(1e-5+self._recon_label) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label),
             axis = 1
         )
-        cross_entropy += -tf.reduce_sum(
-            self.label * tf.log(1e-5+self._fc_recon_label) + (1-self.label) * tf.log(1e-5 + 1-self._fc_recon_label),
-            axis = 1
-        )
         return tf.reduce_mean(cross_entropy)
 
     
-    '''
     @lazy_property
     def loss_label_states(self):
         squared_sum = tf.reduce_sum(
@@ -383,14 +352,14 @@ class AIN:
             axis = 1
         )
         return tf.reduce_mean(squared_sum)
-    '''
+    
 
     @lazy_method
     def loss(self, partial_loss, loss_x, loss_y):
         partial_loss_func = lambda: tf.cond(tf.equal(partial_loss, "LOSS_X"), lambda: loss_x, lambda: loss_y)
         loss = tf.cond(tf.equal(partial_loss, "FULL_LOSS"), lambda: loss_x + loss_y, partial_loss_func)
         recon_loss = FLAGS.GAMMA_R * self.loss_reconstruct
-        label_loss = tf.constant(0.0) # FLAGS.GAMMA_L * self.loss_label_states
+        label_loss = tf.constant(0.0) #FLAGS.GAMMA_L * self.loss_label_states
         loss += (recon_loss + label_loss)
         if FLAGS.SPARSE:
             sparse_loss = FLAGS.GAMMA_S * self._autoencoder.rho_distance(FLAGS.SPARSE_RHO)
@@ -460,6 +429,9 @@ class AIN:
                 accum_op = [accum_grads[i].assign_add(g) for i, g in enumerate(gradients) if g!= None]
                 avg_op = [grads.assign(grads/accum_iters) for grads in accum_grads]
             else:
+                zero_op = None
+                accum_op = None
+                avg_op = None
                 accum_grads = gradients
             if FLAGS.IS_GRAD_CLIPPING:
                 """
@@ -484,10 +456,7 @@ class AIN:
                 name = v.name.replace(":", "_")
                 tf.summary.histogram(name+"_gradients", g)
             tf.summary.scalar("Learning_rate", learning_rate)
-            if accum_iters != 1:
-                return op, (zero_op, accum_op, avg_op), learning_rate
-            else:
-                return op, learning_rate
+            return op, (zero_op, accum_op, avg_op), learning_rate
 
     @lazy_property
     def prediction(self):

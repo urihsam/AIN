@@ -13,6 +13,7 @@ def set_flags():
     flags.DEFINE_integer("ENC_RES_BLOCK_SIZE", 3, "The num of layers in each block")
     flags.DEFINE_integer("NUM_DEC_RES_BLOCK", 5, "The num of residual block")
     flags.DEFINE_integer("DEC_RES_BLOCK_SIZE", 3, "The num of layers in each block")
+    flags.DEFINE_string("ATT_TYPE", "GOOGLE", "TRAD or GOOGLE")
     flags.DEFINE_integer("EMB_SIZE", 512, "The embedding size")
     flags.DEFINE_integer("G_EMB_SIZE", 512, "The embedding size")
     flags.DEFINE_integer("D_EMB_SIZE", 512, "The embedding size")
