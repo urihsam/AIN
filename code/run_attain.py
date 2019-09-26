@@ -233,6 +233,7 @@ def test():
         batch_xs, batch_ys = data.next_test_batch(FLAGS.BATCH_SIZE)
         feed_dict = {
             images_holder: batch_xs,
+            label_holder: batch_ys,
             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
             is_training: False
@@ -244,8 +245,8 @@ def test():
         x_offset = 0
         y_offset = 64
         for i in range(10):
-            im1 = Image.fromarray(np.uint8(batch_xs[i]))
-            im2 = Image.fromarray(np.uint8(adv_images[i]))
+            im1 = Image.fromarray(np.uint8(batch_xs[i]*255.0))
+            im2 = Image.fromarray(np.uint8(adv_images[i]*255.0))
             new_im.paste(im1, (x_offset, 0))
             new_im.paste(im2, (x_offset, y_offset))
             x_offset += im1.size[0]
