@@ -34,7 +34,7 @@ class ATTAIN:
         with tf.variable_scope(FLAGS.LBL_NAME) as lbl_scope:
             row = self.data.get_shape().as_list()[1]#data.get_shape().as_list()[1]
             col = self.data.get_shape().as_list()[2]#int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
-            cha = self.data.get_shape().as_list()[3]
+            cha = 1#self.data.get_shape().as_list()[3]
             img_shape = [row, col, cha]
             size = np.prod(img_shape)
             w1_shape = [label.get_shape().as_list()[-1], size]
@@ -55,8 +55,8 @@ class ATTAIN:
             self._label_states = tf.concat(self._label_states, -1) # [B, 64, 4, 3]
             '''
             self._label_states = tf.reshape(label_states, [-1] + img_shape)
-            self.labeled_data = tf.multiply(self.data, self._label_states) # 2
-            #self.labeled_data = tf.concat([self.data, self._label_states], -1) # 1
+            #self.labeled_data = tf.multiply(self.data, self._label_states) # 2
+            self.labeled_data = tf.concat([self.data, self._label_states], -1) # 1
             
 
             #self._labeled_data= tf.concat([data, self._label_states], -2) #[B, 64, 68, 3]
@@ -86,7 +86,7 @@ class ATTAIN:
                         out_channel_size=self.central_channel_size,
                         out_norm=FLAGS.ENC_OUT_NORM,
                         use_norm=FLAGS.ENC_NORM,
-                        img_channel=FLAGS.NUM_CHANNELS)
+                        img_channel=FLAGS.NUM_CHANNELS+1)
                     self._central_states = self._encoder.evaluate(self.labeled_data, self.is_training)
                 
                 '''

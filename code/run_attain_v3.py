@@ -1,4 +1,4 @@
-import nn.attain as attain
+import nn.attain_v3 as attain
 import os
 from tensorflow.examples.tutorials.mnist import input_data
 from PIL import Image

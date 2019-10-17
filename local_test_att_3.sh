@@ -1,5 +1,5 @@
 #!/bin/bash
-python ./code/run_attain_v2.py --local --NUM_EPOCHS 1 --BATCH_SIZE 80 --EVAL_FREQUENCY 1\
+python ./code/run_attain_v3.py --local --NUM_EPOCHS 1 --BATCH_SIZE 80 --EVAL_FREQUENCY 1\
     --AE_TYPE ATTAE\
     --ATT_TYPE TRAD\
     --NUM_PRE_EPOCHS 20 --PRE_EVAL_FREQUENCY 1\
@@ -12,11 +12,11 @@ python ./code/run_attain_v2.py --local --NUM_EPOCHS 1 --BATCH_SIZE 80 --EVAL_FRE
     --LOSS_Y_LOW_BOUND_T -500.0 --LOSS_Y_UP_BOUND_T 500.0\
     --LOSS_Y_LOW_BOUND_F -500.0\
     --LOSS_Y_LOW_BOUND_C -500.0 --LOSS_Y_UP_BOUND_C 500.0\
-    --BETA_Y_TRANS 20\
+    --BETA_Y_TRANS 20.0\
     --BETA_Y_FAKE 0.1\
-    --BETA_Y_CLEAN 20\
+    --BETA_Y_CLEAN 20.0\
     --PIXEL_BOUND 0.1\
-    --ENC_NORM BATCH --DEC_NORM BATCH\
+    --ENC_NORM LAYER --DEC_NORM LAYER\
     --CENTRAL_CHANNEL_SIZE 3\
     --NUM_ENC_RES_BLOCK 1 --ENC_RES_BLOCK_SIZE 1\
     --NUM_DEC_RES_BLOCK 1 --DEC_RES_BLOCK_SIZE 1\

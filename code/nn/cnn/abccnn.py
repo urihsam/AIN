@@ -43,19 +43,19 @@ class ABCCNN(ABC):
         self.use_norm = use_norm
 
 
-    def _conv_weights_biases(self, W_name, b_name, filter_sizes, in_channel, channel_sizes, transpose=False, init_type="XV_1", no_bias=False):
+    def _conv_weights_biases(self, W_name, b_name, filter_sizes, in_channel, channel_sizes, name_shift=0, transpose=False, init_type="XV_1", no_bias=False):
         num_layer = len(channel_sizes)
         _weights = {}
         _biases = {}
         for idx in range(num_layer):
-            W_key = "{}{}".format(W_name, idx)
+            W_key = "{}{}".format(W_name, idx+name_shift)
             if transpose:
                 W_shape = filter_sizes[idx]+[channel_sizes[idx], in_channel]
             else:
                 W_shape = filter_sizes[idx]+[in_channel, channel_sizes[idx]]
             _weights[W_key] = ne.weight_variable(W_shape, name=W_key, init_type=init_type)
             if no_bias == False:
-                b_key = "{}{}".format(b_name, idx)
+                b_key = "{}{}".format(b_name, idx+name_shift)
                 b_shape = [channel_sizes[idx]]
                 _biases[b_key] = ne.bias_variable(b_shape, name=b_key)
 

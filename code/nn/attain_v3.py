@@ -5,8 +5,8 @@ import nn.vcae as vcae
 import nn.vcae_new as vcae_new
 import nn.cavcae as cavcae
 import nn.resnet as resnet
-import nn.ae.attresenc as attresenc
-import nn.ae.attresdec as attresdec
+import nn.ae.attresenc_v2 as attresenc
+import nn.ae.attresdec_v2 as attresdec
 #import nn.embedder_v2 as embedder
 #import nn.embedder_v3 as embedder
 import nn.embedder as embedder
@@ -32,36 +32,46 @@ class ATTAIN:
 
         # Class label autoencoder
         with tf.variable_scope(FLAGS.LBL_NAME) as lbl_scope:
-            row = self.data.get_shape().as_list()[1]#data.get_shape().as_list()[1]
-            col = self.data.get_shape().as_list()[2]#int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
-            cha = self.data.get_shape().as_list()[3]
-            img_shape = [row, col, cha]
-            size = np.prod(img_shape)
-            w1_shape = [label.get_shape().as_list()[-1], size]
-            w1 = ne.weight_variable(w1_shape, "lbl_W1", init_type="HE")
-            b1 = ne.bias_variable([size], "lbl_b1")
-            label_states = ne.sigmoid(ne.fully_conn(label, w1, b1))
-            #
-            w2_shape = [size, label.get_shape().as_list()[-1]]
-            w2 = ne.weight_variable(w2_shape, "lbl_W2", init_type="HE")
-            b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "lbl_b2")
-            self._recon_label = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
-            #
-            '''
-            self._label_states = []
-            
-            for _ in range(FLAGS.NUM_CHANNELS):
-                self._label_states.append(tf.reshape(label_states, [-1] + img_shape))
-            self._label_states = tf.concat(self._label_states, -1) # [B, 64, 4, 3]
-            '''
-            self._label_states = tf.reshape(label_states, [-1] + img_shape)
-            self.labeled_data = tf.multiply(self.data, self._label_states) # 2
-            #self.labeled_data = tf.concat([self.data, self._label_states], -1) # 1
-            
+            with tf.variable_scope("conditional"):
+                row = self.data.get_shape().as_list()[1]#data.get_shape().as_list()[1]
+                col = self.data.get_shape().as_list()[2]#int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
+                cha = 1#self.data.get_shape().as_list()[3]
+                img_shape = [row, col, cha]
+                size = np.prod(img_shape)
+                w1_shape = [label.get_shape().as_list()[-1], size]
+                w1 = ne.weight_variable(w1_shape, "lbl_W1", init_type="HE")
+                b1 = ne.bias_variable([size], "lbl_b1")
+                label_states = ne.sigmoid(ne.fully_conn(label, w1, b1))
+                #
+                w2_shape = [size, label.get_shape().as_list()[-1]]
+                w2 = ne.weight_variable(w2_shape, "lbl_W2", init_type="HE")
+                b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "lbl_b2")
+                self._recon_label = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
+                #
+                self._label_states = tf.reshape(label_states, [-1] + img_shape)
+                #self.labeled_data = tf.multiply(self.data, self._label_states) # 2
+                self.labeled_data = tf.concat([self.data, self._label_states], -1) # 1
 
-            #self._labeled_data= tf.concat([data, self._label_states], -2) #[B, 64, 68, 3]
-            #self._labeled_central_states= tf.concat([self._central_states, self._label_states], -1)
-        #self.lbl_scope = lbl_scope
+            if FLAGS.USE_LABEL_MASK:
+                with tf.variable_scope("mask"):
+                    ## mask
+                    row = 64
+                    col = 64
+                    img_shape = [row, col]
+                    size = np.prod(img_shape)
+                    w1_shape = [label.get_shape().as_list()[-1], size]
+                    w1 = ne.weight_variable(w1_shape, "mask_W1", init_type="HE")
+                    b1 = ne.bias_variable([size], "mask_b1")
+                    label_states = ne.tanh(ne.fully_conn(label, w1, b1))
+                    #
+                    w2_shape = [size, label.get_shape().as_list()[-1]]
+                    w2 = ne.weight_variable(w2_shape, "mask_W2", init_type="HE")
+                    b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "mask_b2")
+                    self._recon_label_2 = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
+                    #
+                    self._mask_states = tf.reshape(label_states, [-1] + img_shape)
+            else:
+                self._mask_states = None
 
         with tf.variable_scope('autoencoder'):
             if FLAGS.AE_TYPE == "ATTAE":
@@ -86,19 +96,8 @@ class ATTAIN:
                         out_channel_size=self.central_channel_size,
                         out_norm=FLAGS.ENC_OUT_NORM,
                         use_norm=FLAGS.ENC_NORM,
-                        img_channel=FLAGS.NUM_CHANNELS)
+                        img_channel=FLAGS.NUM_CHANNELS+1)
                     self._central_states = self._encoder.evaluate(self.labeled_data, self.is_training)
-                
-                '''
-                # Embedder
-                with tf.variable_scope(FLAGS.EMB_NAME) as emb_scope:
-                    self._dec_embedder = embedder.EMBEDDER(self._central_states.get_shape().as_list()[1:], 
-                                                    [self.central_emb_size],
-                                                    emb_norm=FLAGS.EMB_NORM)
-                    self._central_embedded, self._embed_k_vs, self._embed_k_coefs =\
-                        self._dec_embedder.evaluate(self._central_states, self.is_training, res_start=1)
-                '''
-
                 # Decoder
                 with tf.variable_scope(FLAGS.DEC_NAME) as dec_scope:
                     self._decoder_t = attresdec.ATTRESDEC(
@@ -121,7 +120,7 @@ class ATTAIN:
                         in_channel_size=self.central_channel_size,
                         in_norm=FLAGS.DEC_IN_NORM,
                         use_norm=FLAGS.DEC_NORM)
-                    self._generated_t = self._decoder_t.evaluate(self._central_states, self.is_training)
+                    self._generated_t = self._decoder_t.evaluate(self._central_states, self.is_training, self._mask_states)
                     #self._generated_t = tf.reshape(self._generated_t, [-1, row, data.get_shape().as_list()[2]+col, data.get_shape().as_list()[3]])
                     #self._generated_t, self._generated_label_states = tf.split(self._generated_t, [data.get_shape().as_list()[2], col], -2)                
                 generated = self._generated_t + data
@@ -285,13 +284,13 @@ class ATTAIN:
                     FLAGS.LOSS_Y_LOW_BOUND_T)
                 )
                 loss_2 = tf.reduce_mean(tf.minimum(FLAGS.LOSS_Y_UP_BOUND_T,
-                        np.exp(2.0) * (
+                        np.exp(1.0) * (
                             tf.exp(
                                 tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_at_y_faked), 0.0)
                             ) - 1.0)
                     )
                 )
-                Ly_dist = loss_1 + loss_2
+                Ly_dist = loss_2
                 
             return beta_t * Ly_dist, Ly_dist
 
@@ -385,14 +384,14 @@ class ATTAIN:
                 )
 
                 loss_2 = tf.reduce_mean(tf.minimum(FLAGS.LOSS_Y_UP_BOUND_C,
-                        np.exp(2.0) * (
+                        np.exp(1.0) * (
                             tf.exp(
                                 tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_max_exclude_y_clean), 0.0)
                             ) -1.0
                         )
                     )
                 )
-                Ly_dist = loss_1 + loss_2
+                Ly_dist = loss_2
                 
                 
             return beta_c * Ly_dist, Ly_dist
@@ -431,7 +430,14 @@ class ATTAIN:
             self.label * tf.log(1e-5+self._recon_label) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label),
             axis = 1
         )
-        return tf.reduce_mean(cross_entropy)
+        if FLAGS.USE_LABEL_MASK:
+            cross_entropy_2 = -tf.reduce_sum(
+                self.label * tf.log(1e-5+self._recon_label_2) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label_2),
+                axis = 1
+            )
+            return tf.reduce_mean(cross_entropy) + tf.reduce_mean(cross_entropy_2)
+        else:
+            return tf.reduce_mean(cross_entropy)
 
     
     @lazy_property

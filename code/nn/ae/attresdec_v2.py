@@ -291,7 +291,7 @@ class ATTRESDEC(ABCCNN):
 
     
     @lazy_method
-    def decv_res_groups(self, inputs, W_name="W_decv_", b_name="b_decv_"):
+    def decv_res_groups(self, inputs, mask_states, W_name="W_decv_", b_name="b_decv_"):
         def _form_groups(net, start_layer, end_layer):
             for layer_id in range(start_layer, end_layer):
                 #res blocks
@@ -314,8 +314,9 @@ class ATTRESDEC(ABCCNN):
                     net = ne.batch_norm(net, self.is_training)
                 elif self.use_norm == "LAYER":
                     net = ne.layer_norm(net, self.is_training)
-                net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])
-                net = ne.drop_out(net, self.decv_drop_rate[layer_id], self.is_training)      
+                if layer_id != end_layer-1:
+                    net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])
+                    net = ne.drop_out(net, self.decv_drop_rate[layer_id], self.is_training)      
                 
             return net
 
@@ -323,6 +324,15 @@ class ATTRESDEC(ABCCNN):
         net = _form_groups(net, 0, self.att_pos_idx)
         # attention
         net = self.att_layer(net)
+        # mask
+        if FLAGS.USE_LABEL_MASK:
+            w = net.get_shape().as_list()[1]
+            h = net.get_shape().as_list()[2]
+            c = net.get_shape().as_list()[3]
+            net = tf.reshape(net, [-1, w*h, c])
+            net = tf.matmul(net, mask_states)
+            net = tf.reshape(net, [-1, w, h, c])
+        #
         net = _form_groups(net, self.att_pos_idx, self.num_decv)
         
         net = tf.identity(net, name='output')
@@ -332,13 +342,20 @@ class ATTRESDEC(ABCCNN):
 
 
     @lazy_method
-    def evaluate(self, inputs, is_training):
+    def evaluate(self, inputs, is_training, mask_states):
         self.is_training = is_training
         #assert inputs.get_shape().as_list()[1:] == self.res_in_shape
         if self.use_in_layer:
             inputs = self.in_layer(inputs)
-        generated = self.decv_res_groups(inputs)
-        generated = ne.brelu(generated, self.output_low_bound, self.output_up_bound) # clipping the final result 
+        generated = self.decv_res_groups(inputs, mask_states)
+        #generated = ne.brelu(generated, self.output_low_bound, self.output_up_bound) # clipping the final result 
+
+        ratio = 0.8
+        maximum = tf.reduce_max(generated) * ratio
+        minimum = tf.reduce_min(generated) * ratio
+        positive = tf.minimum(tf.maximum(generated, 0.0), maximum) / maximum * self.output_up_bound
+        negative = tf.maximum(tf.minimum(generated, 0.0), minimum) / minimum * self.output_low_bound
+        generated = negative + positive
         #assert generated.get_shape().as_list()[1:] == self.decv_out_shape
         return generated
 

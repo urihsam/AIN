@@ -226,6 +226,7 @@ class ATTRESENC(ABCCNN):
         net = _form_groups(net, 0, self.att_pos_idx+1)
         # attention
         net = self.att_layer(net)
+        
         net = _form_groups(net, self.att_pos_idx+1, self.num_conv)
         net = tf.identity(net, name='conv_output')
         #import pdb; pdb.set_trace()

@@ -44,6 +44,7 @@ def set_flags():
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     flags.DEFINE_integer("PRE_EVAL_FREQUENCY", 1, "Frequency for pre evaluation") # 25
     flags.DEFINE_bool("load_AE", False, "Load AE from the last training result or not")
+    flags.DEFINE_bool("train_label", True, "Train and get label states, save into ckpt")
     flags.DEFINE_bool("early_stopping", False, "Use early stopping or not")
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
     # AE type
@@ -52,10 +53,11 @@ def set_flags():
     flags.DEFINE_bool("VARI", False, "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
     # AE params
     flags.DEFINE_integer("BOTTLENECK", 2048, "The size of bottleneck")
+    flags.DEFINE_bool("USE_LABEL_MASK", False, "Whether use label mask or not")
     # Loss params
-    flags.DEFINE_string("LOSS_MODE_TRANS", "C&W", "How to calculate loss from fake imgae") # ENTRO, C&W
-    flags.DEFINE_string("LOSS_MODE_FAKE", "C&W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C&W
-    flags.DEFINE_string("LOSS_MODE_CLEAN", "C&W", "How to calculate loss from clean image") # LOGITS, PREDS, ENTRO, C&W
+    flags.DEFINE_string("LOSS_MODE_TRANS", "C_W2", "How to calculate loss from fake imgae") # ENTRO, C_W
+    flags.DEFINE_string("LOSS_MODE_FAKE", "C_W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C_W
+    flags.DEFINE_string("LOSS_MODE_CLEAN", "C_W2", "How to calculate loss from clean image") # LOGITS, PREDS, ENTRO, C_W
     ##
     flags.DEFINE_string("NORM_TYPE", "L2", "The norm type") # INF, L2, L1
     flags.DEFINE_float('REG_SCALE', 0.01, 'The scale of regularization')
@@ -78,7 +80,14 @@ def set_flags():
     flags.DEFINE_float("LOSS_X_THRE_CHANGE_EPOCHS", 10, "Change epochs of Loss x threshold") # 10
     flags.DEFINE_float("MIN_LOSS_X_THRE", 50, "Minimum threshold for loss x") # 50
     flags.DEFINE_float("MAX_LOSS_X_THRE", 1500, "Maximum threshold for loss x") # 150
-    ## Kappa: C&W loss
+    ## Loss Y
+    flags.DEFINE_float("LOSS_Y_LOW_BOUND_F", -20.0, "The lower bound of loss y for fake")
+    flags.DEFINE_float("LOSS_Y_UP_BOUND_F", 500.0, "The up bound of loss y for fake")
+    flags.DEFINE_float("LOSS_Y_LOW_BOUND_T", -20.0, "The lower bound of loss y for trans")
+    flags.DEFINE_float("LOSS_Y_UP_BOUND_T", 500.0, "The up bound of loss y for trans")
+    flags.DEFINE_float("LOSS_Y_LOW_BOUND_C", -20.0, "The lower bound of loss y for clean")
+    flags.DEFINE_float("LOSS_Y_UP_BOUND_C", 500.0, "The up bound of loss y for clean")
+    ## Kappa: C_W loss
     flags.DEFINE_integer("MODIFY_KAPPA_THRESHOLD", 5, "Modify beta y threshold")
     flags.DEFINE_float("KAPPA_FOR_TRANS", 8, "The min logits distance") # 8
     flags.DEFINE_float("KAPPA_TRANS_CHANGE_RATE", 1.2, "The change rate of KAPPA TRANS")

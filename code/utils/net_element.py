@@ -69,11 +69,15 @@ def sigmoid(x):
     with tf.variable_scope("SIGMOID"):
         return tf.nn.sigmoid(x)
 
+def tanh(x):
+    with tf.variable_scope("TANH"):
+        return tf.nn.tanh(x)
+
 def fully_conn(x, weights, biases):
     return tf.add(tf.matmul(x, weights), biases)
 
 
-def batch_norm(inputs, training, axis=3):
+def batch_norm(inputs, training, axis=-1):
     """Performs a batch normalization using a standard set of parameters."""
     # We set fused=True for a significant performance boost. See
     # https://www.tensorflow.org/performance/performance_guide#common_fused_ops
