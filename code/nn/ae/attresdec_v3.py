@@ -12,7 +12,7 @@ class ATTRESDEC(ABCCNN):
                  output_up_bound,
                  # attention layer
                  attention_type,
-                 att_pos_idx=-2,
+                 att_pos_idx=-2, # att will be applied after att_pos_idx of decv_res_block
                  att_f_filter_size=[1,1],
                  att_f_strides = [1,1],
                  att_f_padding = "SAME",
@@ -149,25 +149,29 @@ class ATTRESDEC(ABCCNN):
     @lazy_method
     def att_weights(self):
         W = {}
+        if self.att_pos_idx < len(self.decv_channel_sizes) - 1:
+            decv_channel_size = self.decv_channel_sizes[self.att_pos_idx + 1]
+        else:
+            decv_channel_size = self.img_channel
         f_filters, _, _ = self._conv_weights_biases("W_att_f_", None, 
                                                     [self.att_f_filter_size], 
-                                                    self.decv_channel_sizes[self.att_pos_idx], 
+                                                    decv_channel_size, 
                                                     [self.att_f_channel_size],
                                                     no_bias=True)
         g_filters, _, _ = self._conv_weights_biases("W_att_g_", None, 
                                                     [self.att_g_filter_size], 
-                                                    self.decv_channel_sizes[self.att_pos_idx], 
+                                                    decv_channel_size, 
                                                     [self.att_g_channel_size], 
                                                     no_bias=True)
         h_filters, _, _ = self._conv_weights_biases("W_att_h_", None, 
                                                     [self.att_h_filter_size], 
-                                                    self.decv_channel_sizes[self.att_pos_idx], 
+                                                    decv_channel_size, 
                                                     [self.att_h_channel_size], 
                                                     no_bias=True)
         o_filters, _, _ = self._conv_weights_biases("W_att_o_", None, 
                                                     [self.att_o_filter_size], 
                                                     self.att_o_channel_size,
-                                                    [self.decv_channel_sizes[self.att_pos_idx]], 
+                                                    [decv_channel_size], 
                                                     no_bias=True)
         W.update(f_filters); W.update(g_filters); W.update(h_filters); W.update(o_filters)
 
@@ -214,10 +218,12 @@ class ATTRESDEC(ABCCNN):
         curr_filter = self.in_filter[filter_name]
         curr_bias = self.in_bias[bias_name]
         # batch normalization
-        if self.in_norm == "BATCH":
+        if self.use_norm == "BATCH":
             net = ne.batch_norm(net, self.is_training)
-        elif self.in_norm == "LAYER":
+        elif self.use_norm == "LAYER":
             net = ne.layer_norm(net, self.is_training)
+        elif self.use_norm == "INSTA":
+            net = ne.instance_norm(net, self.is_training)
         #net = ne.leaky_brelu(net, self.conv_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
         net = ne.leaky_relu(net, self.in_leaky_ratio)
         # convolution
@@ -278,6 +284,8 @@ class ATTRESDEC(ABCCNN):
                         net = ne.batch_norm(net, self.is_training)
                     elif self.use_norm == "LAYER":
                         net = ne.layer_norm(net, self.is_training)
+                    elif self.use_norm == "INSTA":
+                        net = ne.instance_norm(net, self.is_training)
                     net = ne.leaky_relu(net, self.res_leaky_ratio[layer_id])
                     #net = ne.leaky_brelu(net, self.res_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
                     net = ne.drop_out(net, self.res_drop_rate[layer_id], self.is_training)
@@ -314,30 +322,37 @@ class ATTRESDEC(ABCCNN):
                     net = ne.batch_norm(net, self.is_training)
                 elif self.use_norm == "LAYER":
                     net = ne.layer_norm(net, self.is_training)
+                elif self.use_norm == "INSTA":
+                    net = ne.instance_norm(net, self.is_training)
+                
                 if layer_id != end_layer-1:
                     net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])
-                    net = ne.drop_out(net, self.decv_drop_rate[layer_id], self.is_training)      
+                    net = ne.drop_out(net, self.decv_drop_rate[layer_id], self.is_training)
+                
+                if layer_id == self.num_decv - 2:
+                    # mask
+                    if FLAGS.USE_LABEL_MASK:
+                        w = net.get_shape().as_list()[1]
+                        h = net.get_shape().as_list()[2]
+                        c = net.get_shape().as_list()[3]
+                        net = tf.reshape(net, [-1, w*h, c])
+                        net = tf.matmul(net, mask_states)
+                        net = tf.reshape(net, [-1, w, h, c]) 
+                        if self.use_norm == "BATCH":
+                            net = ne.batch_norm(net, self.is_training)
+                        elif self.use_norm == "LAYER":
+                            net = ne.layer_norm(net, self.is_training)
+                        elif self.use_norm == "INSTA":
+                            net = ne.instance_norm(net, self.is_training)
                 
             return net
 
         net = inputs
-        net = _form_groups(net, 0, self.att_pos_idx)
+        net = _form_groups(net, 0, self.att_pos_idx + 1)
         # attention
         net = self.att_layer(net)
-        # mask
-        if FLAGS.USE_LABEL_MASK:
-            w = net.get_shape().as_list()[1]
-            h = net.get_shape().as_list()[2]
-            c = net.get_shape().as_list()[3]
-            net = tf.reshape(net, [-1, w*h, c])
-            net = tf.matmul(net, mask_states)
-            net = tf.reshape(net, [-1, w, h, c])
-            if self.use_norm == "BATCH":
-                net = ne.batch_norm(net, self.is_training)
-            elif self.use_norm == "LAYER":
-                net = ne.layer_norm(net, self.is_training)
-        #
-        net = _form_groups(net, self.att_pos_idx, self.num_decv)
+        
+        net = _form_groups(net, self.att_pos_idx + 1, self.num_decv)
         
         net = tf.identity(net, name='output')
         # net = tf.reshape(net, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel])

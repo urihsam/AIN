@@ -90,6 +90,10 @@ def layer_norm(inputs, training):
     return tf.contrib.layers.layer_norm(inputs)
 
 
+def instance_norm(inputs, training):
+    return tf.contrib.layers.instance_norm(inputs)
+
+
 def drop_out(x, drop_rate, is_training):
     with tf.variable_scope("DROP_OUT"):
         return tf.layers.dropout(x, drop_rate, training=is_training)
