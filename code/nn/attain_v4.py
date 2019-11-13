@@ -7,8 +7,6 @@ import nn.cavcae as cavcae
 import nn.resnet as resnet
 import nn.ae.attresenc_v3 as attresenc
 import nn.ae.attresdec_v3 as attresdec
-#import nn.embedder_v2 as embedder
-#import nn.embedder_v3 as embedder
 import nn.embedder as embedder
 from utils.decorator import *
 from dependency import *
@@ -177,6 +175,8 @@ class ATTAIN:
         
         max_dist_true = tf.reduce_max(tf.abs(x_adv-x_true))
         max_dist_fake = tf.reduce_max(tf.abs(x_adv-x_fake))
+        # print info
+        max_dist_trans = tf.reduce_max(tf.abs(x_true-x_fake))
         def _dist(vec1, vec2):
             if FLAGS.NORM_TYPE == "L2":
                 Lx_dist = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(vec1-vec2), 1)))
@@ -194,14 +194,19 @@ class ATTAIN:
 
         Lx = Lx_true + Lx_fake
 
+        # print info
+        Lx_dist_trans = _dist(x_true, x_fake)
+
         tf.summary.scalar("Loss_x", Lx)
         tf.summary.scalar("Loss_x_true", Lx_true)
         tf.summary.scalar("Loss_x_fake", Lx_fake)
         tf.summary.scalar("Dist_x_true", Lx_dist_true)
         tf.summary.scalar("Dist_x_fake", Lx_dist_fake)
+        tf.summary.scalar("Dist_x_trans", Lx_dist_trans)
         tf.summary.scalar("Max_pixel_dist_true", max_dist_true)
         tf.summary.scalar("Max_pixel_dist_fake", max_dist_fake)
-        return Lx, (Lx_true, Lx_fake), (Lx_dist_true, Lx_dist_fake), (max_dist_true, max_dist_fake)
+        tf.summary.scalar("Max_pixel_dist_trans", max_dist_trans)
+        return Lx, (Lx_true, Lx_fake), (Lx_dist_true, Lx_dist_fake, Lx_dist_trans), (max_dist_true, max_dist_fake, max_dist_trans)
 
 
     @lazy_property

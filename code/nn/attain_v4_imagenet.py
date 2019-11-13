@@ -4,11 +4,9 @@ import nn.scae as scae
 import nn.vcae as vcae
 import nn.vcae_new as vcae_new
 import nn.cavcae as cavcae
-import nn.resnet as resnet
-import nn.ae.attresenc_v2 as attresenc
-import nn.ae.attresdec_v2 as attresdec
-#import nn.embedder_v2 as embedder
-#import nn.embedder_v3 as embedder
+import nn.imagenet_resnet50 as resnet
+import nn.ae.attresenc_v4 as attresenc
+import nn.ae.attresdec_v3 as attresdec
 import nn.embedder as embedder
 from utils.decorator import *
 from dependency import *
@@ -33,8 +31,8 @@ class ATTAIN:
         # Class label autoencoder
         with tf.variable_scope(FLAGS.LBL_NAME) as lbl_scope:
             with tf.variable_scope("conditional"):
-                row = self.data.get_shape().as_list()[1]#data.get_shape().as_list()[1]
-                col = self.data.get_shape().as_list()[2]#int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
+                row = 38
+                col = 38
                 cha = 1#self.data.get_shape().as_list()[3]
                 img_shape = [row, col, cha]
                 size = np.prod(img_shape)
@@ -42,6 +40,7 @@ class ATTAIN:
                 w1 = ne.weight_variable(w1_shape, "lbl_W1", init_type="HE")
                 b1 = ne.bias_variable([size], "lbl_b1")
                 label_states = ne.sigmoid(ne.fully_conn(label, w1, b1))
+                label_states = ne.layer_norm(label_states, self.is_training)
                 #
                 w2_shape = [size, label.get_shape().as_list()[-1]]
                 w2 = ne.weight_variable(w2_shape, "lbl_W2", init_type="HE")
@@ -50,7 +49,7 @@ class ATTAIN:
                 #
                 self._label_states = tf.reshape(label_states, [-1] + img_shape)
                 #self.labeled_data = tf.multiply(self.data, self._label_states) # 2
-                self.labeled_data = tf.concat([self.data, self._label_states], -1) # 1
+                # self.labeled_data = tf.concat([self.data, self._label_states], -1) # 1
 
             if FLAGS.USE_LABEL_MASK:
                 with tf.variable_scope("mask"):
@@ -63,6 +62,7 @@ class ATTAIN:
                     w1 = ne.weight_variable(w1_shape, "mask_W1", init_type="HE")
                     b1 = ne.bias_variable([size], "mask_b1")
                     label_states = ne.tanh(ne.fully_conn(label, w1, b1))
+                    label_states = ne.layer_norm(label_states, self.is_training)
                     #
                     w2_shape = [size, label.get_shape().as_list()[-1]]
                     w2 = ne.weight_variable(w2_shape, "mask_W2", init_type="HE")
@@ -78,13 +78,14 @@ class ATTAIN:
                 # Encoder
                 with tf.variable_scope(FLAGS.ENC_NAME) as enc_scope:
                     self._encoder = attresenc.ATTRESENC(
+                        cond_pos_idx=3,
                         attention_type=FLAGS.ATT_TYPE,
-                        att_pos_idx=0,
-                        att_f_channel_size = 64,
-                        att_g_channel_size = 64,
-                        att_h_channel_size = 64,
-                        conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
-                        conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
+                        att_pos_idx=2,
+                        att_f_channel_size = 8,
+                        att_g_channel_size = 8,
+                        att_h_channel_size = 8,
+                        conv_filter_sizes=[[4,4], [4,4], [4,4], [4,4], [4,4]],
+                        conv_strides = [[2,2], [2,2], [2,2], [2,2], [2,2]], 
                         conv_channel_sizes=[64, 128, 256, 512, 1024], 
                         conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2, 0.2],
                         conv_drop_rate=[0.0, 0.8, 0.2, 0.6, 0.0], #1.[0.0, 0.8, 0.2, 0.6, 0.0], 2.[0.0, 0.8, 0.2, 0.6, 0.0]
@@ -96,19 +97,20 @@ class ATTAIN:
                         out_channel_size=self.central_channel_size,
                         out_norm=FLAGS.ENC_OUT_NORM,
                         use_norm=FLAGS.ENC_NORM,
-                        img_channel=FLAGS.NUM_CHANNELS+1)
-                    self._central_states = self._encoder.evaluate(self.labeled_data, self.is_training)
+                        img_channel=FLAGS.NUM_CHANNELS)
+                    self._central_states = self._encoder.evaluate(self.data, self.is_training, self._label_states)
+                #import pdb; pdb.set_trace()
                 # Decoder
                 with tf.variable_scope(FLAGS.DEC_NAME) as dec_scope:
                     self._decoder_t = attresdec.ATTRESDEC(
                         self.output_low_bound, self.output_up_bound,
                         attention_type=FLAGS.ATT_TYPE,
-                        att_pos_idx=-1,
-                        att_f_channel_size = 64,
-                        att_g_channel_size = 64,
-                        att_h_channel_size = 64,
-                        decv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
-                        decv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
+                        att_pos_idx=-3,
+                        att_f_channel_size = 8,
+                        att_g_channel_size = 8,
+                        att_h_channel_size = 8,
+                        decv_filter_sizes=[[4,4], [4,4], [4,4], [4,4], [4,4]],
+                        decv_strides = [[2,2], [2,2], [2,2], [2,2], [2,2]], 
                         decv_channel_sizes=[1024, 512, 256, 128, 64], 
                         decv_leaky_ratio=[0.2, 0.2, 0.2, 0.2, 0.2],
                         decv_drop_rate=[0.0, 0.6, 0.2, 0.8, 0.0], #1.[0.0, 0.6, 0.2, 0.8, 0.0], 2.[0.0, 0.6, 0.2, 0.8, 0.0]
@@ -133,24 +135,24 @@ class ATTAIN:
         
         # Adv data generated by AE
         with tf.variable_scope('target') as scope:
-            self._target_adv = resnet.resnet18()
+            self._target_adv = resnet.resnet50()
             #self._target_adv = resnet.resnet18()
             self._target_adv_logits, self._target_adv_prediction = self._target_adv.prediction(self._autoencoder_prediction)
             self._target_adv_accuracy = self._target_adv.accuracy(self._target_adv_prediction, self.label)
         # Fake data generated by attacking algo
         with tf.variable_scope(scope, reuse=True):
-            self._target_attack = resnet.resnet18()
+            self._target_attack = resnet.resnet50()
             self.data_fake = fgm(self._target_attack.prediction, data, label, eps=self.attack_epsilon, iters=FLAGS.FGM_ITERS,
                                  clip_min=0., clip_max=1.)
         
         with tf.variable_scope(scope, reuse=True):
-            self._target_fake = resnet.resnet18()
+            self._target_fake = resnet.resnet50()
             self._target_fake_logits, self._target_fake_prediction = self._target_fake.prediction(self.data_fake)
             self.label_fake = self.get_label(self._target_fake_prediction)
             self._target_fake_accuracy = self._target_fake.accuracy(self._target_fake_prediction, label)
         # Clean data
         with tf.variable_scope(scope, reuse=True):
-            self._target = resnet.resnet18()
+            self._target = resnet.resnet50()
             self._target_logits, self._target_prediction = self._target.prediction(data)
             self._target_accuracy = self._target.accuracy(self._target_prediction, label)
             
@@ -175,6 +177,8 @@ class ATTAIN:
         
         max_dist_true = tf.reduce_max(tf.abs(x_adv-x_true))
         max_dist_fake = tf.reduce_max(tf.abs(x_adv-x_fake))
+        # print info
+        max_dist_trans = tf.reduce_max(tf.abs(x_true-x_fake))
         def _dist(vec1, vec2):
             if FLAGS.NORM_TYPE == "L2":
                 Lx_dist = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.square(vec1-vec2), 1)))
@@ -192,14 +196,19 @@ class ATTAIN:
 
         Lx = Lx_true + Lx_fake
 
+        # print info
+        Lx_dist_trans = _dist(x_true, x_fake)
+
         tf.summary.scalar("Loss_x", Lx)
         tf.summary.scalar("Loss_x_true", Lx_true)
         tf.summary.scalar("Loss_x_fake", Lx_fake)
         tf.summary.scalar("Dist_x_true", Lx_dist_true)
         tf.summary.scalar("Dist_x_fake", Lx_dist_fake)
+        tf.summary.scalar("Dist_x_trans", Lx_dist_trans)
         tf.summary.scalar("Max_pixel_dist_true", max_dist_true)
         tf.summary.scalar("Max_pixel_dist_fake", max_dist_fake)
-        return Lx, (Lx_true, Lx_fake), (Lx_dist_true, Lx_dist_fake), (max_dist_true, max_dist_fake)
+        tf.summary.scalar("Max_pixel_dist_trans", max_dist_trans)
+        return Lx, (Lx_true, Lx_fake), (Lx_dist_true, Lx_dist_fake, Lx_dist_trans), (max_dist_true, max_dist_fake, max_dist_trans)
 
 
     @lazy_property

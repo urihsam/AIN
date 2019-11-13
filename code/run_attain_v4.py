@@ -22,8 +22,8 @@ def main(arvg=None):
 
 
 def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, valid=False):
-    model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake), \
-            (model_max_dist_true, model_max_dist_fake) = model.loss_x(graph_dict["beta_x_t_holder"], graph_dict["beta_x_f_holder"])
+    model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake, model_lx_dist_trans), \
+            (model_max_dist_true, model_max_dist_fake, model_max_dist_trans) = model.loss_x(graph_dict["beta_x_t_holder"], graph_dict["beta_x_f_holder"])
     model_loss_y, (model_ly_trans, model_ly_fake, model_ly_clean), (model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean) =\
         model.loss_y(graph_dict["beta_y_t_holder"], graph_dict["beta_y_f_holder"], graph_dict["beta_y_c_holder"]
                     )
@@ -32,8 +32,8 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
     fetches = [model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy, 
             model_loss, model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg, 
             model_loss_x, model_lx_true, model_lx_fake, 
-            model_lx_dist_true, model_lx_dist_fake,
-            model_max_dist_true, model_max_dist_fake,
+            model_lx_dist_true, model_lx_dist_fake, model_lx_dist_trans,
+            model_max_dist_true, model_max_dist_fake, model_max_dist_trans, 
             model_loss_y, model_ly_trans, model_ly_fake, model_ly_clean, 
             model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean,
             graph_dict["merged_summary"]]
@@ -46,8 +46,8 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
 
     acc = 0; adv_acc = 0; fake_acc = 0; 
     loss = 0; recon_loss = 0; label_loss = 0; sparse_loss = 0; var_loss = 0; reg = 0;
-    l_x = 0; Lx_true = 0; Lx_fake = 0; Lx_dist_true = 0; Lx_dist_fake = 0;
-    max_dist_true = 0; max_dist_fake = 0;
+    l_x = 0; Lx_true = 0; Lx_fake = 0; Lx_dist_true = 0; Lx_dist_fake = 0; Lx_dist_trans = 0;
+    max_dist_true = 0; max_dist_fake = 0; max_dist_trans = 0;
     l_y = 0; Ly_trans = 0; Ly_fake = 0; Ly_clean = 0; 
     Ly_dist_trans = 0; Ly_dist_fake = 0; Ly_dist_clean = 0
     
@@ -68,16 +68,13 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             graph_dict["beta_y_t_holder"]: FLAGS.BETA_Y_TRANS,
             graph_dict["beta_y_f_holder"]: FLAGS.BETA_Y_FAKE,
             graph_dict["beta_y_c_holder"]: FLAGS.BETA_Y_CLEAN,
-            #graph_dict["kappa_t_holder"]: FLAGS.KAPPA_FOR_TRANS,
-            #graph_dict["kappa_f_holder"]: FLAGS.KAPPA_FOR_FAKE,
-            #graph_dict["kappa_c_holder"]: FLAGS.KAPPA_FOR_CLEAN,
             graph_dict["partial_loss_holder"]: FLAGS.PARTIAL_LOSS,
             graph_dict["is_training"]: False
         }
         
         batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_recon_loss, batch_label_loss, batch_sparse_loss, batch_var_loss, batch_reg, \
-            batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, \
-            batch_max_dist_true, batch_max_dist_fake, \
+            batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, batch_Lx_dist_trans,\
+            batch_max_dist_true, batch_max_dist_fake, batch_max_dist_trans,\
             batch_l_y, batch_Ly_trans, batch_Ly_fake, batch_Ly_clean,\
             batch_Ly_dist_trans, batch_Ly_dist_fake, batch_Ly_dist_clean, \
             summary = sess.run(fetches=fetches, feed_dict=feed_dict)
@@ -96,8 +93,10 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
         Lx_fake += batch_lx_fake
         Lx_dist_true += batch_Lx_dist_true
         Lx_dist_fake += batch_Lx_dist_fake
+        Lx_dist_trans += batch_Lx_dist_trans
         max_dist_true += batch_max_dist_true
         max_dist_fake += batch_max_dist_fake
+        max_dist_trans += batch_max_dist_trans
         l_y += batch_l_y
         Ly_trans += batch_Ly_trans
         Ly_fake += batch_Ly_fake
@@ -120,8 +119,10 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
     Lx_fake /= total_batch
     Lx_dist_true /= total_batch
     Lx_dist_fake /= total_batch
+    Lx_dist_trans /= total_batch
     max_dist_true /= total_batch
     max_dist_fake /= total_batch
+    max_dist_trans /= total_batch
     l_y /= total_batch
     Ly_trans /= total_batch
     Ly_fake /= total_batch
@@ -139,8 +140,9 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
     print("Loss x = {:.4f}  Loss y = {:.4f}".format(l_x, l_y))
     print("Loss x for true = {:.4f} Loss x for fake = {:.4}".format(Lx_true, Lx_fake))
     print("Loss y for trans = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_trans, Ly_fake, Ly_clean))
-    print("Lx distance for true = {:.4f} Lx distance for fake = {:.4f}".format(Lx_dist_true, Lx_dist_fake))
-    print("Max pixel distance for true = {:.4f} Max pixel distance for fake = {:.4f}".format(max_dist_true, max_dist_fake))
+    print("Lx distance for true = {:.4f} Lx distance for fake = {:.4f} Lx distance for trans = {:.4f}".format(Lx_dist_true, Lx_dist_fake, Lx_dist_trans))
+    print("Max pixel distance for true = {:.4f} Max pixel distance for fake = {:.4f} Max pixel distance for trans = {:.4f}".format(
+        max_dist_true, max_dist_fake, max_dist_trans))
     print("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
         Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
     
@@ -148,9 +150,16 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
         file.write('Original accuracy: {0:0.5f} \n'.format(acc))
         file.write('Faked accuracy: {0:0.5f} \n'.format(fake_acc))
         file.write('Attacked accuracy: {0:0.5f} \n'.format(adv_acc))
-        file.write("Max pixel distance for true = {:.4f} Max pixel distance for fake = {:.4f} \n".format(max_dist_true, max_dist_fake))
+        file.write("Loss = {:.4f}  Loss recon = {:.4f}  Loss label = {:.4f} Loss sparse = {:.4f}  Loss var = {:.4f}  Loss reg = {:.4f}\n".format(
+            loss, recon_loss, label_loss, sparse_loss, var_loss, reg))
+        file.write("Loss x = {:.4f}  Loss y = {:.4f}\n".format(l_x, l_y))
+        file.write("Loss x for true = {:.4f} Loss x for fake = {:.4}\n".format(Lx_true, Lx_fake))
+        file.write("Loss y for trans = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}\n".format(Ly_trans, Ly_fake, Ly_clean))
+        file.write("Lx distance for true = {:.4f} Lx distance for fake = {:.4f} Lx distance for trans = {:.4f}\n".format(Lx_dist_true, Lx_dist_fake, Lx_dist_trans))
+        file.write("Max pixel distance for true = {:.4f} Max pixel distance for fake = {:.4f} Max pixel distance for trans = {:.4f}\n".format(
+            max_dist_true, max_dist_fake, max_dist_trans))
         file.write("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f} \n".format(
-        Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
+            Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
         file.write("############################################")
     
     res_dict = {"acc": acc, 
@@ -166,8 +175,10 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
                 "Lx_fake": Lx_fake,
                 "Lx_dist_true": Lx_dist_true,
                 "Lx_dist_fake": Lx_dist_fake,
+                "Lx_dist_trans": Lx_dist_trans,
                 "max_dist_true": max_dist_true,
                 "max_dist_fake": max_dist_fake,
+                "max_dist_trans": max_dist_trans,
                 "l_y": l_y, 
                 "Ly_trans": Ly_trans,
                 "Ly_fake": Ly_fake,
@@ -270,6 +281,11 @@ def test():
 def train():
     """
     """
+    INIT_PIXEL_BOUND = FLAGS.PIXEL_BOUND
+    INIT_BETA_X_TRUE = FLAGS.BETA_X_TRUE
+    INIT_BETA_X_FAKE = FLAGS.BETA_X_FAKE
+    INIT_BETA_Y_TRANS = FLAGS.BETA_Y_TRANS
+    INIT_BETA_Y_CLEAN = FLAGS.BETA_Y_CLEAN
     import time
     tf.reset_default_graph()
     g = tf.get_default_graph()
@@ -286,9 +302,6 @@ def train():
         beta_y_t_holder = tf.placeholder(tf.float32, ())
         beta_y_f_holder = tf.placeholder(tf.float32, ())
         beta_y_c_holder = tf.placeholder(tf.float32, ())
-        #kappa_t_holder = tf.placeholder(tf.float32, ())
-        #kappa_f_holder = tf.placeholder(tf.float32, ())
-        #kappa_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
         # model
@@ -299,8 +312,8 @@ def train():
         pre_op, _, _, _ = model.optimization(pre_label_loss, scope="PRE_OPT")
         # model training
         
-        model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake), \
-            (model_max_dist_true, model_max_dist_fake) = model.loss_x(beta_x_t_holder, beta_x_f_holder)
+        model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake, model_lx_dist_trans), \
+            (model_max_dist_true, model_max_dist_fake, model_max_dist_trans) = model.loss_x(beta_x_t_holder, beta_x_f_holder)
         model_loss_y, (model_ly_trans, model_ly_fake, model_ly_clean), (model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean) =\
             model.loss_y(beta_y_t_holder, beta_y_f_holder, beta_y_c_holder
                         )
@@ -320,9 +333,6 @@ def train():
         graph_dict["beta_y_t_holder"] = beta_y_t_holder
         graph_dict["beta_y_f_holder"] = beta_y_f_holder
         graph_dict["beta_y_c_holder"] = beta_y_c_holder
-        #graph_dict["kappa_t_holder"] = kappa_t_holder
-        #graph_dict["kappa_f_holder"] = kappa_f_holder
-        #graph_dict["kappa_c_holder"] = kappa_c_holder
         graph_dict["partial_loss_holder"] = partial_loss_holder
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
@@ -446,15 +456,15 @@ def train():
                 fetches = [model_op, model_loss, 
                         model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg, 
                         model_loss_x, model_lx_true, model_lx_fake, 
-                        model_lx_dist_true, model_lx_dist_fake,
-                        model_max_dist_true, model_max_dist_fake,
+                        model_lx_dist_true, model_lx_dist_fake, model_lx_dist_trans,
+                        model_max_dist_true, model_max_dist_fake, model_max_dist_trans,
                         model_loss_y, model_ly_trans, model_ly_fake, model_ly_clean, 
                         model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean,
                         merged_summary, model._target_fake_prediction,
                         model_lr, model._encoder.att_gamma, model._decoder_t.att_gamma,
                         model._target_accuracy, model._target_adv_accuracy, model._target_fake_accuracy]
-                _, loss, recon_loss, label_loss, sparse_loss, var_loss, reg, l_x, Lx_true, Lx_fake, Lx_dist_true, Lx_dist_fake, \
-                    max_dist_true, max_dist_fake, l_y, Ly_trans, Ly_fake, Ly_clean, \
+                _, loss, recon_loss, label_loss, sparse_loss, var_loss, reg, l_x, Lx_true, Lx_fake, Lx_dist_true, Lx_dist_fake, Lx_dist_trans, \
+                    max_dist_true, max_dist_fake, max_dist_trans, l_y, Ly_trans, Ly_fake, Ly_clean, \
                     Ly_dist_trans, Ly_dist_fake, Ly_dist_clean, \
                     summary, fake_prediction,\
                     lr, enc_att_gamma, dec_att_gamma,\
@@ -481,8 +491,10 @@ def train():
                     print("Loss x = {:.4f}  Loss y = {:.4f}".format(l_x, l_y))
                     print("Loss x for true = {:.4f} Loss x for fake = {:.4}".format(Lx_true, Lx_fake))
                     print("Loss y for trans = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_trans, Ly_fake, Ly_clean))
-                    print("Lx distance for true = {:.4f} Lx distance for fake = {:.4f}".format(Lx_dist_true, Lx_dist_fake))
-                    print("Max pixel distance for true = {:.4f} Max pixel distance for fake = {:.4f}".format(max_dist_true, max_dist_fake))
+                    print("Lx distance for true = {:.4f} Lx distance for fake = {:.4f} Lx distance for trans = {:.4f}".format(
+                        Lx_dist_true, Lx_dist_fake, Lx_dist_trans))
+                    print("Max pixel distance for true = {:.4f} Max pixel distance for fake = {:.4f} Max pixel distance for trans = {:.4f}".format(
+                        max_dist_true, max_dist_fake, max_dist_trans))
                     print("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
                         Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
                     print()
@@ -509,52 +521,35 @@ def train():
             else:
                 model.tf_save(sess)
                 print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
-            '''
-            if valid_dict["adv_acc"] < min_adv_acc:
-                min_adv_acc = valid_dict["adv_acc"]
-                alert_count = 0
-            else:
-                alert_count += 1
-            # early stopping
-            if FLAGS.early_stopping:
-                if alert_count >= FLAGS.EARLY_STOPPING_THRESHOLD:
-                    print("Early Stopped.")
-                    break
-            if alert_count >= FLAGS.MODIFY_KAPPA_THRESHOLD and valid_dict["adv_acc"] >= 2.0 * valid_dict["fake_acc"]:
-                # reset
-                min_adv_acc = np.Inf
-                alert_count = 0
-                FLAGS.KAPPA_FOR_TRANS = FLAGS.KAPPA_TRANS_CHANGE_RATE * FLAGS.KAPPA_FOR_TRANS
-                FLAGS.KAPPA_FOR_CLEAN = FLAGS.KAPPA_CLEAN_CHANGE_RATE * FLAGS.KAPPA_FOR_CLEAN
-                print("Kappa trans was changed to {:.4f}".format(FLAGS.KAPPA_FOR_TRANS))
-                print("Kappa clean was changed to {:.4f}".format(FLAGS.KAPPA_FOR_CLEAN))
-            '''
+            
             print("******************************************************************")
             print()
             print()
 
-            if FLAGS.PARTIAL_LOSS != "FULL_LOSS":
-                #Update loss x threshold
-                if FLAGS.LOSS_X_THRESHOLD >= FLAGS.MIN_LOSS_X_THRE and FLAGS.LOSS_X_THRESHOLD <= FLAGS.MAX_LOSS_X_THRE and (epoch+1) % FLAGS.LOSS_X_THRE_CHANGE_EPOCHS == 0:
-                    FLAGS.LOSS_X_THRESHOLD = FLAGS.LOSS_X_THRESHOLD * FLAGS.LOSS_X_THRE_CHANGE_RATE
+             
             # Update Pixel bound
             if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
-                FLAGS.PIXEL_BOUND = FLAGS.PIXEL_BOUND * FLAGS.BOUND_CHANGE_RATE
+                FLAGS.PIXEL_BOUND = model_utils.change_coef(INIT_PIXEL_BOUND,  FLAGS.BOUND_CHANGE_RATE, (epoch+1) // FLAGS.BOUND_CHANGE_EPOCHS,
+                                                            FLAGS.BOUND_CHANGE_TYPE)
                 # reser learning rate
                 sess.run(fetches=[model_lr_reset_op])
             
             # Update BETA_X_TRUE
             if FLAGS.BETA_X_TRUE >= FLAGS.MIN_BETA_X_TRUE and FLAGS.BETA_X_TRUE <= FLAGS.MAX_BETA_X_TRUE and (epoch+1) % FLAGS.BETA_X_TRUE_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_X_TRUE =  FLAGS.BETA_X_TRUE * FLAGS.BETA_X_TRUE_CHANGE_RATE
+                FLAGS.BETA_X_TRUE =  model_utils.change_coef(INIT_BETA_X_TRUE, FLAGS.BETA_X_TRUE_CHANGE_RATE, (epoch+1) // FLAGS.BETA_X_TRUE_CHANGE_EPOCHS,
+                                                             FLAGS.BETA_X_TRUE_CHANGE_TYPE)
             # Update Beta_X_FAKE
             if FLAGS.BETA_X_FAKE >= FLAGS.MIN_BETA_X_FAKE and FLAGS.BETA_X_FAKE <= FLAGS.MAX_BETA_X_FAKE and (epoch+1) % FLAGS.BETA_X_FAKE_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_X_FAKE =  FLAGS.BETA_X_FAKE * FLAGS.BETA_X_FAKE_CHANGE_RATE
+                FLAGS.BETA_X_FAKE =  model_utils.change_coef(INIT_BETA_X_FAKE, FLAGS.BETA_X_FAKE_CHANGE_RATE, (epoch+1) // FLAGS.BETA_X_FAKE_CHANGE_EPOCHS,
+                                                             FLAGS.BETA_X_FAKE_CHANGE_TYPE)
             # Update BETA_Y_TRANS
             if FLAGS.BETA_Y_TRANS >= FLAGS.MIN_BETA_Y_TRANS and FLAGS.BETA_Y_TRANS <= FLAGS.MAX_BETA_Y_TRANS and (epoch+1) % FLAGS.BETA_Y_TRANS_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_Y_TRANS =  FLAGS.BETA_Y_TRANS * FLAGS.BETA_Y_TRANS_CHANGE_RATE
+                FLAGS.BETA_Y_TRANS =  model_utils.change_coef(INIT_BETA_Y_TRANS, FLAGS.BETA_Y_TRANS_CHANGE_RATE, (epoch+1) // FLAGS.BETA_Y_TRANS_CHANGE_EPOCHS,
+                                                              FLAGS.BETA_Y_TRANS_CHANGE_TYPE)
             # Update Beta_Y_CLEAN
             if FLAGS.BETA_Y_CLEAN >= FLAGS.MIN_BETA_Y_CLEAN and FLAGS.BETA_Y_CLEAN <= FLAGS.MAX_BETA_Y_CLEAN and (epoch+1) % FLAGS.BETA_Y_CLEAN_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_Y_CLEAN =  FLAGS.BETA_Y_CLEAN * FLAGS.BETA_Y_CLEAN_CHANGE_RATE
+                FLAGS.BETA_Y_CLEAN =  model_utils.change_coef(INIT_BETA_Y_CLEAN, FLAGS.BETA_Y_CLEAN_CHANGE_RATE, (epoch+1) // FLAGS.BETA_Y_CLEAN_CHANGE_EPOCHS,
+                                                              FLAGS.BETA_Y_CLEAN_CHANGE_TYPE)
 
             
         print("Optimization Finished!")

@@ -5,6 +5,7 @@ from nn.resnet_model import Model
 
 
 class resnet18:
+    # For tiny-imagenet dataset
     def __init__(self):
         self.model = Model(
             resnet_size=18,

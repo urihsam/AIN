@@ -242,14 +242,16 @@ class ATTRESDEC(ABCCNN):
         net = inputs
         f = ne.conv2d(net, filters=self.att_filters[W_name+"f_0"], biases=None,
                       strides=self.att_f_strides, padding=self.att_f_padding) # [b, h, w, c]
-        if self.attention_type == "GOOGLE":
-            f = ne.max_pool_2x2(f)
         g = ne.conv2d(net, filters=self.att_filters[W_name+"g_0"], biases=None,
                       strides=self.att_g_strides, padding=self.att_g_padding) # [b, h, w, c]
         h = ne.conv2d(net, filters=self.att_filters[W_name+"h_0"], biases=None,
                       strides=self.att_h_strides, padding=self.att_h_padding) # [b, h, w, c]
         if self.attention_type == "GOOGLE":
-            h = ne.max_pool_2x2(h)
+            f = ne.max_pool_2x2(f) # [b, h/2, w/2, c]
+            h = ne.max_pool_2x2(h) # [b, h/2, w/2, c]
+        elif self.attention_type == "DUOCONV":
+            f = ne.max_pool_2x2(ne.max_pool_2x2(f)) # [b, h/4, w/4, c]
+            h = ne.max_pool_2x2(ne.max_pool_2x2(h)) # [b, h/4, w/4, c]
 
         # N = h * w
         s = tf.matmul(ne.hw_flatten(g), ne.hw_flatten(f), transpose_b=True) # [b, N, N]
@@ -344,7 +346,7 @@ class ATTRESDEC(ABCCNN):
                             net = ne.layer_norm(net, self.is_training)
                         elif self.use_norm == "INSTA":
                             net = ne.instance_norm(net, self.is_training)
-                
+                #import pdb; pdb.set_trace()
             return net
 
         net = inputs

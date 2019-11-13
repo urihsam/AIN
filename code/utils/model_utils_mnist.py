@@ -21,21 +21,21 @@ def set_flags():
     flags.DEFINE_integer("EMB_SUBK", 8, "The sub k smallest")
     flags.DEFINE_string("EMB_TYPE", "MINIMUM", "SOFTMAX or MINIMUM")
     # Path
-    flags.DEFINE_string("RESNET18_PATH", "./models/target_classifier/resnet18", "Path of Resnet18")
+    flags.DEFINE_string("MNISTCNN_PATH", "./code/models/target_classifier/mnist_cnn", "Path of MNIST cnn")
     flags.DEFINE_string("AE_PATH", "./models/AE", "Path of AAN")
     flags.DEFINE_string("CNN_PATH", "./models/target_classifier/basic_CNN", "Path of CNN")
     flags.DEFINE_string("TRAIN_LOG_PATH", "./graphs/train", "Path of log for training")
     flags.DEFINE_string("VALID_LOG_PATH", "./graphs/valid", "Path of log for validation")
     flags.DEFINE_string("TEST_LOG_PATH", "./graphs/test", "Path of log for testing")
-    flags.DEFINE_string("DATA_DIR", "/Users/mashiru/Life/My-Emory/Research/Research-Project/Data/tiny-imagenet-200", "Data dir")
+    flags.DEFINE_string("DATA_DIR", "/Users/mashiru/Life/My-Emory/Research/Research-Project/Data/mnist", "Data dir")
     # Data description
     flags.DEFINE_bool("NORMALIZE", True, "Data is normalized to [0, 1]")
     flags.DEFINE_bool("BIASED", False, "Data is shifted to [-1, 1]")
-    flags.DEFINE_integer("NUM_CLASSES", 200, "Number of classification classes")
+    flags.DEFINE_integer("NUM_CLASSES", 10, "Number of classification classes")
     flags.DEFINE_integer("LBL_STATES_SIZE", 256, "Size of label states")
-    flags.DEFINE_integer("IMAGE_ROWS", 64, "Input row dimension")
-    flags.DEFINE_integer("IMAGE_COLS", 64, "Input column dimension")
-    flags.DEFINE_integer("NUM_CHANNELS", 3, "Input depth dimension")
+    flags.DEFINE_integer("IMAGE_ROWS", 28, "Input row dimension")
+    flags.DEFINE_integer("IMAGE_COLS", 28, "Input column dimension")
+    flags.DEFINE_integer("NUM_CHANNELS", 1, "Input depth dimension")
     # Training params
     flags.DEFINE_integer("NUM_EPOCHS", 1, "Number of epochs") # 200
     flags.DEFINE_integer("NUM_PRE_EPOCHS", 2, "Number of epochs") # 200

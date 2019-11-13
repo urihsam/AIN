@@ -386,9 +386,6 @@ class ATTRESDEC(ABCCNN):
         negative = tf.multiply(neg_bounds, negative) # <=0
         #
         generated = negative + positive
-        
-
-        
 
         #assert generated.get_shape().as_list()[1:] == self.decv_out_shape
         return generated

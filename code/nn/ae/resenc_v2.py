@@ -14,6 +14,7 @@ class RESENC(ABCCNN):
                  conv_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
                  conv_channel_sizes=[32, 64, 128], # [128, 128, 128, 128, 1]
                  conv_leaky_ratio=[0.4, 0.4, 0.4],
+                 conv_drop_rate=[0.4, 0.4, 0.4],
                  # residual layers
                  num_res_block=4,
                  res_block_size=2,
@@ -21,6 +22,7 @@ class RESENC(ABCCNN):
                  res_strides = [1,1], #[[1,1], [1,1], [1,1], [1,1], [1,1]],
                  res_padding = "SAME", #["SAME", "SAME", "SAME", "SAME", "SAME"],
                  res_leaky_ratio=[0.2, 0.2],
+                 res_drop_rate=[0.4, 0.4],
                  # out fc layer
                  out_state=768,
                  out_fc_states=[768],
@@ -47,6 +49,7 @@ class RESENC(ABCCNN):
             self.conv_padding = conv_padding
         self.conv_channel_sizes = conv_channel_sizes
         self.conv_leaky_ratio = conv_leaky_ratio
+        self.conv_drop_rate = conv_drop_rate
         # res layers
         self.num_res_block = num_res_block
         self.res_block_size = res_block_size
@@ -66,6 +69,10 @@ class RESENC(ABCCNN):
             self.res_leaky_ratio = res_leaky_ratio
         else:
             self.res_leaky_ratio = [res_leaky_ratio] * self.res_block_size
+        if isinstance(res_drop_rate, list):
+            self.res_drop_rate = res_drop_rate
+        else:
+            self.res_drop_rate = [res_drop_rate] * self.res_block_size
         # out fc layer
         self.out_state = out_state
         if isinstance(out_fc_states, list):
@@ -121,60 +128,74 @@ class RESENC(ABCCNN):
     @lazy_method
     def conv_res_groups(self, inputs, W_name="W_conv_", b_name="b_conv_"):
         #net = tf.reshape(inputs, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel])
+        def _form_groups(net, start_layer, end_layer):
+            for layer_id in range(start_layer, end_layer):
+                filter_name = "{}{}".format(W_name, layer_id)
+                bias_name = "{}{}".format(b_name, layer_id)
+                curr_filter = self.conv_filters[filter_name]
+                curr_bias = self.conv_biases[bias_name]
+                # convolution
+                net = ne.conv2d(net, filters=curr_filter, biases=curr_bias,
+                                strides=self.conv_strides[layer_id],
+                                padding=self.conv_padding[layer_id])
+                # batch normalization
+                if self.use_norm == "BATCH":
+                    net = ne.batch_norm(net, self.is_training)
+                elif self.use_norm == "LAYER":
+                    net = ne.layer_norm(net, self.is_training)
+                elif self.use_norm == "INSTA":
+                    net = ne.instance_norm(net, self.is_training)
+                #net = ne.leaky_brelu(net, self.conv_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
+                net = ne.leaky_relu(net, self.conv_leaky_ratio[layer_id])
+                net = ne.drop_out(net, self.conv_drop_rate[layer_id], self.is_training)
+
+                # res blocks
+                W_res_name = "W_g{}_res".format(layer_id)
+                b_res_name = "b_g{}_res".format(layer_id)
+                net = self.res_blocks(net, W_res_name, b_res_name, scope="RES_{}".format(layer_id))
+            return net
         net = inputs
-        for layer_id in range(self.num_conv):
-            filter_name = "{}{}".format(W_name, layer_id)
-            bias_name = "{}{}".format(b_name, layer_id)
-            curr_filter = self.conv_filters[filter_name]
-            curr_bias = self.conv_biases[bias_name]
-            # convolution
-            net = ne.conv2d(net, filters=curr_filter, biases=curr_bias, 
-                            strides=self.conv_strides[layer_id], 
-                            padding=self.conv_padding[layer_id])
-            # batch normalization
-            if self.use_norm == "BATCH":
-                net = ne.batch_norm(net, self.is_training)
-            elif self.use_norm == "LAYER":
-                net = ne.layer_norm(net, self.is_training)
-            #net = ne.leaky_brelu(net, self.conv_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
-            net = ne.leaky_relu(net, self.conv_leaky_ratio[layer_id])
-            
-            # res blocks
-            W_res_name = "W_g{}_res".format(layer_id)
-            b_res_name = "b_g{}_res".format(layer_id)
-            net = self.res_blocks(net, W_res_name, b_res_name)
+        
+        net = _form_groups(net, 0, self.num_conv)
         net = tf.identity(net, name='conv_output')
         #import pdb; pdb.set_trace()
         return net
 
 
-    @lazy_method
-    def res_blocks(self, inputs, W_name, b_name):
-        net = inputs
-        for res_id in range(self.num_res_block):
-            res_net = net
-            for layer_id in range(self.res_block_size):
-                filter_name = "{}{}_{}".format(W_name, res_id, layer_id)
-                bias_name = "{}{}_{}".format(b_name, res_id, layer_id)
-                curr_filter = self.res_filters[filter_name]
-                curr_bias = self.res_biases[bias_name]
+    @lazy_method_no_scope
+    def res_blocks(self, inputs, W_name, b_name, scope):
+        with tf.variable_scope(scope):
+            net = inputs
+            for res_id in range(self.num_res_block):
+                res_net = net
+                for layer_id in range(self.res_block_size):
+                    filter_name = "{}{}_{}".format(W_name, res_id, layer_id)
+                    bias_name = "{}{}_{}".format(b_name, res_id, layer_id)
+                    curr_filter = self.res_filters[filter_name]
+                    curr_bias = self.res_biases[bias_name]
 
-                #net = ne.leaky_brelu(net, self.res_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
-                net = ne.leaky_relu(net, self.res_leaky_ratio[layer_id])
-                # convolution
-                net = ne.conv2d(net, filters=curr_filter, biases=curr_bias, 
-                                strides=self.res_strides[layer_id], 
-                                padding=self.res_padding[layer_id])
+                    # convolution
+                    net = ne.conv2d(net, filters=curr_filter, biases=curr_bias,
+                                    strides=self.res_strides[layer_id],
+                                    padding=self.res_padding[layer_id])
+                    if self.use_norm == "BATCH":
+                        net = ne.batch_norm(net, self.is_training)
+                    elif self.use_norm == "LAYER":
+                        net = ne.layer_norm(net, self.is_training)
+                    elif self.use_norm == "INSTA":
+                        net = ne.instance_norm(net, self.is_training)
+
+                    #net = ne.leaky_brelu(net, self.res_leaky_ratio[layer_id], self.layer_low_bound, self.output_up_bound) # Nonlinear act
+                    net = ne.leaky_relu(net, self.res_leaky_ratio[layer_id])
+                    net = ne.drop_out(net, self.res_drop_rate[layer_id], self.is_training)
 
 
-            net += res_net
-            if self.use_norm == "BATCH":
-                net = ne.batch_norm(net, self.is_training)
-            elif self.use_norm == "LAYER":
-                net = ne.layer_norm(net, self.is_training)
-        net = tf.identity(net, name='res_output')
-        #import pdb; pdb.set_trace()
-        return net
+
+                net += res_net
+
+            net = tf.identity(net, name='res_output')
+            #import pdb; pdb.set_trace()
+            return net
     
 
     @lazy_method
