@@ -1,4 +1,4 @@
-from utils.attack_utils import fgm
+from utils.fgsm_attack import fgm
 import nn.cae as cae
 import nn.scae as scae
 import nn.vcae as vcae
