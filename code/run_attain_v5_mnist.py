@@ -1,14 +1,10 @@
-'''
-Adaptively change pixel bounds
-'''
-import nn.attain_v5 as attain
+import nn.attain_v5_mnist as attain
 import os, math
-from tensorflow.examples.tutorials.mnist import input_data
 from PIL import Image
 from dependency import *
-from utils import model_utils
-from utils.cw_l2_attack import cwl2
-from utils.data_utils import dataset
+import utils.model_utils_mnist as  model_utils
+#from utils.data_utils_mnist_raw import dataset
+from utils.data_utils_mnist import dataset
 
 
 model_utils.set_flags()
@@ -37,7 +33,7 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             model_loss, model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg, 
             model_loss_x, model_lx_true, model_lx_fake, 
             model_lx_dist_true, model_lx_dist_fake, model_lx_dist_trans,
-            model_max_dist_true, model_max_dist_fake, model_max_dist_trans, 
+            model_max_dist_true, model_max_dist_fake, model_max_dist_trans,
             model_loss_y, model_ly_trans, model_ly_fake, model_ly_clean, 
             model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean,
             graph_dict["merged_summary"]]
@@ -78,8 +74,8 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
         }
         
         batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_recon_loss, batch_label_loss, batch_sparse_loss, batch_var_loss, batch_reg, \
-            batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, batch_Lx_dist_trans,\
-            batch_max_dist_true, batch_max_dist_fake, batch_max_dist_trans,\
+            batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, batch_Lx_dist_trans, \
+            batch_max_dist_true, batch_max_dist_fake, batch_max_dist_trans, \
             batch_l_y, batch_Ly_trans, batch_Ly_fake, batch_Ly_clean,\
             batch_Ly_dist_trans, batch_Ly_dist_fake, batch_Ly_dist_clean, \
             summary = sess.run(fetches=fetches, feed_dict=feed_dict)
@@ -136,7 +132,6 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
     Ly_dist_fake /= total_batch
     Ly_dist_clean /= total_batch
 
-    #adv_images = X+adv_noises
     print('Original accuracy: {0:0.5f}'.format(acc))
     print('Faked accuracy: {0:0.5f}'.format(fake_acc))
     print('Attacked accuracy: {0:0.5f}'.format(adv_acc))
@@ -165,7 +160,7 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             max_dist_true, max_dist_fake, max_dist_trans))
         file.write("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f} \n".format(
             Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
-        file.write("############################################\n")
+        file.write("############################################")
     
     res_dict = {"acc": acc, 
                 "fake_acc": fake_acc,
@@ -215,14 +210,10 @@ def test():
         beta_y_t_holder = tf.placeholder(tf.float32, ())
         beta_y_f_holder = tf.placeholder(tf.float32, ())
         beta_y_c_holder = tf.placeholder(tf.float32, ())
-        #kappa_t_holder = tf.placeholder(tf.float32, ())
-        #kappa_f_holder = tf.placeholder(tf.float32, ())
-        #kappa_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
-                              epsilon_holder, is_training, atk_holder)
+        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -245,7 +236,7 @@ def test():
     with tf.Session(graph=g) as sess:
         sess.run(tf.global_variables_initializer())
         # Load target classifier
-        model._target.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
+        model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
         model.tf_load(sess)
         model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         # tensorboard writer
@@ -268,11 +259,11 @@ def test():
             is_training: False
         }
         adv_images = sess.run(model.prediction, feed_dict=feed_dict)
-        width = 10*64
-        height = 2*64
+        width = 10*32
+        height = 2*32
         new_im = Image.new('RGB', (width, height))
         x_offset = 0
-        y_offset = 64
+        y_offset = 32
         for i in range(10):
             im1 = Image.fromarray(np.uint8(batch_xs[i]*255.0))
             im2 = Image.fromarray(np.uint8(adv_images[i]*255.0))
@@ -312,7 +303,6 @@ def train():
         beta_y_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
-        
         # model
         model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
                               epsilon_holder, is_training, atk_holder)
@@ -349,10 +339,9 @@ def train():
         graph_dict["merged_summary"] = merged_summary
 
     with tf.Session(graph=g) as sess:
-        #import pdb; pdb.set_trace()
         sess.run(tf.global_variables_initializer())
         # Load target classifier
-        model._target.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
+        model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
         if FLAGS.load_AE:
             print("Autoencoder loaded.")
             model.tf_load(sess)
@@ -463,6 +452,9 @@ def train():
                         beta_y_t_holder: FLAGS.BETA_Y_TRANS,
                         beta_y_f_holder: FLAGS.BETA_Y_FAKE,
                         beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
+                        #kappa_t_holder: FLAGS.KAPPA_FOR_TRANS,
+                        #kappa_f_holder: FLAGS.KAPPA_FOR_FAKE,
+                        #kappa_c_holder: FLAGS.KAPPA_FOR_CLEAN,
                         is_training: True,
                         partial_loss_holder: FLAGS.PARTIAL_LOSS
                     }
@@ -508,8 +500,7 @@ def train():
                     print("Loss x = {:.4f}  Loss y = {:.4f}".format(l_x, l_y))
                     print("Loss x for true = {:.4f} Loss x for fake = {:.4}".format(Lx_true, Lx_fake))
                     print("Loss y for trans = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_trans, Ly_fake, Ly_clean))
-                    print("Lx distance for true = {:.4f} Lx distance for fake = {:.4f} Lx distance for trans = {:.4f}".format(
-                        Lx_dist_true, Lx_dist_fake, Lx_dist_trans))
+                    print("Lx distance for true = {:.4f} Lx distance for fake = {:.4f} Lx distance for trans = {:.4f}".format(Lx_dist_true, Lx_dist_fake, Lx_dist_trans))
                     print("Max pixel distance for true = {:.4f} Max pixel distance for fake = {:.4f} Max pixel distance for trans = {:.4f}".format(
                         max_dist_true, max_dist_fake, max_dist_trans))
                     print("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
@@ -592,25 +583,6 @@ def train():
                 
                 # reset learning rate
                 sess.run(fetches=[model_lr_reset_op])
-            '''
-            # Update BETA_X_TRUE
-            if FLAGS.BETA_X_TRUE >= FLAGS.MIN_BETA_X_TRUE and FLAGS.BETA_X_TRUE <= FLAGS.MAX_BETA_X_TRUE and (epoch+1) % FLAGS.BETA_X_TRUE_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_X_TRUE =  model_utils.change_coef(INIT_BETA_X_TRUE, FLAGS.BETA_X_TRUE_CHANGE_RATE, (epoch+1) // FLAGS.BETA_X_TRUE_CHANGE_EPOCHS,
-                                                             FLAGS.BETA_X_TRUE_CHANGE_TYPE)
-            # Update Beta_X_FAKE
-            if FLAGS.BETA_X_FAKE >= FLAGS.MIN_BETA_X_FAKE and FLAGS.BETA_X_FAKE <= FLAGS.MAX_BETA_X_FAKE and (epoch+1) % FLAGS.BETA_X_FAKE_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_X_FAKE =  model_utils.change_coef(INIT_BETA_X_FAKE, FLAGS.BETA_X_FAKE_CHANGE_RATE, (epoch+1) // FLAGS.BETA_X_FAKE_CHANGE_EPOCHS,
-                                                             FLAGS.BETA_X_FAKE_CHANGE_TYPE)
-            
-            # Update BETA_Y_TRANS
-            if FLAGS.BETA_Y_TRANS >= FLAGS.MIN_BETA_Y_TRANS and FLAGS.BETA_Y_TRANS <= FLAGS.MAX_BETA_Y_TRANS and (epoch+1) % FLAGS.BETA_Y_TRANS_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_Y_TRANS =  model_utils.change_coef(INIT_BETA_Y_TRANS, FLAGS.BETA_Y_TRANS_CHANGE_RATE, (epoch+1) // FLAGS.BETA_Y_TRANS_CHANGE_EPOCHS,
-                                                              FLAGS.BETA_Y_TRANS_CHANGE_TYPE)
-            # Update Beta_Y_CLEAN
-            if FLAGS.BETA_Y_CLEAN >= FLAGS.MIN_BETA_Y_CLEAN and FLAGS.BETA_Y_CLEAN <= FLAGS.MAX_BETA_Y_CLEAN and (epoch+1) % FLAGS.BETA_Y_CLEAN_CHANGE_EPOCHS == 0:
-                FLAGS.BETA_Y_CLEAN =  model_utils.change_coef(INIT_BETA_Y_CLEAN, FLAGS.BETA_Y_CLEAN_CHANGE_RATE, (epoch+1) // FLAGS.BETA_Y_CLEAN_CHANGE_EPOCHS,
-                                                              FLAGS.BETA_Y_CLEAN_CHANGE_TYPE)
-            '''
 
             
         print("Optimization Finished!")

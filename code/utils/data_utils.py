@@ -113,16 +113,19 @@ class dataset(object):
         return test_img_names_classes_list[: valid_size], test_img_names_classes_list[valid_size: ]
     
     # Load images using the list of tuple in format (image file path, image class name)
-    def _load_image(self, img_name_class, onehot, normalize, biased):
+    def _load_image(self, img_name_class, onehot, normalize, biased, is_np=False):
         file_path, class_name = img_name_class
         path = os.path.join(file_path)
-        im = Image.open(path)
-        image = np.asarray(im)
-        if image.shape != (64, 64, 3):
-            # e.g. grayscale
-            return None
-        assert image.dtype == np.uint8
-        image = image.astype(np.float32)
+        if is_np: # np file
+            image = np.load(path)
+        else:
+            im = Image.open(path)
+            image = np.asarray(im)
+            if image.shape != (64, 64, 3):
+                # e.g. grayscale
+                return None
+            assert image.dtype == np.uint8
+            image = image.astype(np.float32)
         assert image.shape == (64, 64, 3)
         # print(image.shape, file_path)
         if normalize:
@@ -166,12 +169,15 @@ class dataset(object):
         random.shuffle(self._test_image_names_classes)
         self._test_batch_idx = 0
     
-    def next_train_batch(self, batch_size):
+    def next_train_batch(self, batch_size, with_path=False):
         images = np.ndarray([batch_size, 64, 64, 3], dtype='float32')
         if self.onehot:
             labels = np.zeros([batch_size, 200], dtype='float32')
         else:
             labels = np.zeros([batch_size, 1], dtype='float32')
+        if not with_path:
+            atk_images = np.ndarray([batch_size, 64, 64, 3], dtype='float32')
+        paths = []
         idx = 0
         while idx < batch_size:
             if self._train_batch_idx >= self.train_size:
@@ -181,17 +187,35 @@ class dataset(object):
             if res is not None:
                 images[idx, :, :, :] = res[0]
                 labels[idx, :] = res[1]
+                # atk
+                if not with_path:
+                    # atk
+                    path_name = img_name_class[0].split("/")
+                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                    atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
+                                               self.onehot, self.normalize, self.biased,
+                                               is_np=True)
+                    assert atk_res is not None
+                    atk_images[idx, :, :, :] = atk_res[0]
+                #
+                #
+                paths.append(img_name_class[0])
                 idx += 1
             self._train_batch_idx += 1
-        
-        return images, labels
+        if with_path:
+            return images, labels, paths
+        else:
+            return images, labels, atk_images
     
-    def next_valid_batch(self, batch_size):
+    def next_valid_batch(self, batch_size, with_path=False):
         images = np.ndarray([batch_size, 64, 64, 3], dtype='float32')
         if self.onehot:
             labels = np.zeros([batch_size, 200], dtype='float32')
         else:
             labels = np.zeros([batch_size, 1], dtype='float32')
+        if not with_path:
+            atk_images = np.ndarray([batch_size, 64, 64, 3], dtype='float32')
+        paths = []
         idx = 0
         while idx < batch_size:
             if self._valid_batch_idx >= self.valid_size:
@@ -201,18 +225,36 @@ class dataset(object):
             if res is not None:
                 images[idx, :, :, :] = res[0]
                 labels[idx, :] = res[1]
+                # atk
+                if not with_path:
+                    # atk
+                    path_name = img_name_class[0].split("/")
+                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                    atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
+                                               self.onehot, self.normalize, self.biased,
+                                               is_np=True)
+                    assert atk_res is not None
+                    atk_images[idx, :, :, :] = atk_res[0]
+                #
+                #
+                paths.append(img_name_class[0])
                 idx += 1
             self._valid_batch_idx += 1
-        
-        return np.array(images), np.array(labels)
+        if with_path:
+            return np.array(images), np.array(labels), paths
+        else:
+            return np.array(images), np.array(labels), atk_images
     
-    def next_test_batch(self, batch_size):
+    def next_test_batch(self, batch_size, with_path=False):
         images = np.ndarray([batch_size, 64, 64, 3], dtype='float32')
         if self.onehot:
             labels = np.zeros([batch_size, 200], dtype='float32')
         else:
             labels = np.zeros([batch_size, 1], dtype='float32')
+        if not with_path:
+            atk_images = np.ndarray([batch_size, 64, 64, 3], dtype='float32')
         idx = 0
+        paths = []
         while idx < batch_size:
             if self._test_batch_idx >= self.test_size:
                 self.test_shuffle()
@@ -221,8 +263,21 @@ class dataset(object):
             if res is not None:
                 images[idx, :, :, :] = res[0]
                 labels[idx, :] = res[1]
+                if not with_path:
+                    # atk
+                    path_name = img_name_class[0].split("/")
+                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                    atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
+                                               self.onehot, self.normalize, self.biased,
+                                               is_np=True)
+                    assert atk_res is not None
+                    atk_images[idx, :, :, :] = atk_res[0]
+                #
+                paths.append(img_name_class[0])
                 idx += 1
             self._test_batch_idx += 1
-        
-        return np.array(images), np.array(labels)
+        if with_path:
+            return np.array(images), np.array(labels), paths
+        else:
+            return np.array(images), np.array(labels), atk_images
 

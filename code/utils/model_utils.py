@@ -151,6 +151,12 @@ def set_flags():
     flags.DEFINE_float("BOUND_CHANGE_EPOCHS", 2, "Num of epochs per bound change") # 2
     flags.DEFINE_float("MIN_BOUND", 0.001, "Minimum bound for pixel distance") # 4
     flags.DEFINE_float("MAX_BOUND", 1, "Maximum bound for pixel distance") # 128
+    # bound change
+    flags.DEFINE_float("ABS_DIFF_THRESHOLD", 5e-4, "Threshold of Absolute difference between Valid accs")
+    flags.DEFINE_float("ADAPTIVE_UP_THRESHOLD", 0.05, "Upper bound of Valid acc change rate threshold")
+    flags.DEFINE_float("ADAPTIVE_LOW_THRESHOLD", 0.01, "Lower bound of Valid acc change rate threshold") # 128
+    flags.DEFINE_float("ADAPTIVE_BOUND_INC_RATE", 1.01, "Increasement rate of bound change rate")
+    flags.DEFINE_float("ADAPTIVE_BOUND_DEC_RATE", 0.98, "Decreasement rate of bound change rate")
     # Attack params
     flags.DEFINE_float("EPSILON", 1, "Epsilon for fgm attack") # 128
     flags.DEFINE_float("EPSILON_CHANGE_RATE", 0.8, "Epsilon change rate") # 128
@@ -179,6 +185,6 @@ def change_coef(init_value, change_rate, change_itr, change_type="STEP"):
     if change_type == "STEP":
         return init_value * change_rate ** change_itr
     elif change_type == "EXP":
-        return init_value * np.exp(-1.0 * change_rate * change_itr)
+        return init_value * np.exp(change_rate * change_itr)
     elif change_type == "TIME":
         return init_value / (1.0 + change_rate * change_itr)

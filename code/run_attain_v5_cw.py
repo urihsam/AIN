@@ -1,5 +1,5 @@
 '''
-Adaptively change pixel bounds
+Adaptively change pixel bounds; Using C&W
 '''
 import nn.attain_v5 as attain
 import os, math
@@ -57,14 +57,13 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
     
     for idx in range(total_batch):
         if valid:
-            batch_xs, batch_ys, batch_atks = data.next_valid_batch(FLAGS.BATCH_SIZE, False)
+            batch_xs, batch_ys = data.next_valid_batch(FLAGS.BATCH_SIZE)
         else:
-            batch_xs, batch_ys, batch_atks = data.next_test_batch(FLAGS.BATCH_SIZE, False)
+            batch_xs, batch_ys = data.next_test_batch(FLAGS.BATCH_SIZE)
 
         feed_dict = {
             graph_dict["images_holder"]: batch_xs,
             graph_dict["label_holder"]: batch_ys,
-            graph_dict["atk_holder"]: batch_atks,
             graph_dict["low_bound_holder"]: -1.0*FLAGS.PIXEL_BOUND,
             graph_dict["up_bound_holder"]: 1.0*FLAGS.PIXEL_BOUND,
             graph_dict["epsilon_holder"]: FLAGS.EPSILON,
@@ -165,7 +164,7 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             max_dist_true, max_dist_fake, max_dist_trans))
         file.write("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f} \n".format(
             Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
-        file.write("############################################\n")
+        file.write("############################################")
     
     res_dict = {"acc": acc, 
                 "fake_acc": fake_acc,
@@ -206,7 +205,6 @@ def test():
         # Placeholder nodes.
         images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
         label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
-        atk_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
         low_bound_holder = tf.placeholder(tf.float32, ())
         up_bound_holder = tf.placeholder(tf.float32, ())
         epsilon_holder = tf.placeholder(tf.float32, ())
@@ -221,14 +219,12 @@ def test():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
-                              epsilon_holder, is_training, atk_holder)
+        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
         graph_dict["images_holder"] = images_holder
         graph_dict["label_holder"] = label_holder
-        graph_dict["atk_holder"] = atk_holder
         graph_dict["low_bound_holder"] = low_bound_holder
         graph_dict["up_bound_holder"] = up_bound_holder
         graph_dict["epsilon_holder"] = epsilon_holder
@@ -258,11 +254,10 @@ def test():
         test_info(sess, model, test_writer, graph_dict, "test_log.txt", total_batch=total_test_batch)
         test_writer.close() 
         
-        batch_xs, batch_ys, batch_atks = data.next_test_batch(FLAGS.BATCH_SIZE, False)
+        batch_xs, batch_ys = data.next_test_batch(FLAGS.BATCH_SIZE)
         feed_dict = {
             images_holder: batch_xs,
             label_holder: batch_ys,
-            atk_holder: batch_atks,
             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
             is_training: False
@@ -291,7 +286,6 @@ def train():
     INIT_BETA_X_TRUE = FLAGS.BETA_X_TRUE
     INIT_BETA_X_FAKE = FLAGS.BETA_X_FAKE
     INIT_BETA_Y_TRANS = FLAGS.BETA_Y_TRANS
-    INIT_BETA_Y_FAKE = FLAGS.BETA_Y_FAKE
     INIT_BETA_Y_CLEAN = FLAGS.BETA_Y_CLEAN
     import time
     tf.reset_default_graph()
@@ -335,7 +329,6 @@ def train():
         graph_dict = {}
         graph_dict["images_holder"] = images_holder
         graph_dict["label_holder"] = label_holder
-        graph_dict["atk_holder"] = atk_holder
         graph_dict["low_bound_holder"] = low_bound_holder
         graph_dict["up_bound_holder"] = up_bound_holder
         graph_dict["epsilon_holder"] = epsilon_holder
@@ -380,7 +373,7 @@ def train():
             for epoch in range(FLAGS.NUM_PRE_EPOCHS):
                 start_time = time.time()
                 for train_idx in range(total_pre_train_batch):
-                    batch_xs, batch_ys, _ = data.next_train_batch(FLAGS.BATCH_SIZE, True)
+                    batch_xs, batch_ys, _ = data.next_train_batch(FLAGS.BATCH_SIZE)
                     feed_dict = {
                         label_holder: batch_ys,
                         is_training: True
@@ -393,7 +386,7 @@ def train():
                     print("Pre Loss label = {:.4f}".format(pre_loss))
                     pre_valid_loss = 0
                     for valid_idx in range(total_pre_valid_batch):
-                        batch_xs, batch_ys, _ = data.next_valid_batch(FLAGS.BATCH_SIZE, True)
+                        batch_xs, batch_ys, _ = data.next_valid_batch(FLAGS.BATCH_SIZE)
                         feed_dict = {
                             label_holder: batch_ys,
                             is_training: True
@@ -419,22 +412,18 @@ def train():
         change_itr = 0
         last_change_itr = 0
         last_pixel_bound = INIT_PIXEL_BOUND
-        last_beta_x_true = INIT_BETA_X_TRUE
-        last_beta_x_fake = INIT_BETA_X_FAKE
         last_beta_y_trans = INIT_BETA_Y_TRANS 
-        last_beta_y_fake = INIT_BETA_Y_FAKE
         last_beta_y_clean = INIT_BETA_Y_CLEAN
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
             for train_idx in range(total_train_batch):
                 if FLAGS.NUM_ACCUM_ITERS != 1:
                     for accum_idx in range(FLAGS.NUM_ACCUM_ITERS):
-                        batch_xs, batch_ys, batch_atks = data.next_train_batch(FLAGS.BATCH_SIZE, False)
+                        batch_xs, batch_ys, batch_atks = data.next_train_batch(FLAGS.BATCH_SIZE)
 
                         feed_dict = {
                             images_holder: batch_xs,
                             label_holder: batch_ys,
-                            atk_holder: batch_atks,
                             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
                             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
                             epsilon_holder: FLAGS.EPSILON,
@@ -444,17 +433,18 @@ def train():
                             beta_y_f_holder: FLAGS.BETA_Y_FAKE,
                             beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
                             is_training: True,
-                            partial_loss_holder: FLAGS.PARTIAL_LOSS
+                            partial_loss_holder: FLAGS.PARTIAL_LOSS,
+                            atk_holder: batch_atks
                         }
                         sess.run(fetches=[model_accum_op], feed_dict=feed_dict)
                     sess.run(fetches=[model_avg_op])
                 
                 else:
-                    batch_xs, batch_ys, batch_atks = data.next_train_batch(FLAGS.BATCH_SIZE, False)
+                    batch_xs, batch_ys, batch_atks = data.next_train_batch(FLAGS.BATCH_SIZE)
+
                     feed_dict = {
                         images_holder: batch_xs,
                         label_holder: batch_ys,
-                        atk_holder: batch_atks,
                         low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
                         up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
                         epsilon_holder: FLAGS.EPSILON,
@@ -464,7 +454,8 @@ def train():
                         beta_y_f_holder: FLAGS.BETA_Y_FAKE,
                         beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
                         is_training: True,
-                        partial_loss_holder: FLAGS.PARTIAL_LOSS
+                        partial_loss_holder: FLAGS.PARTIAL_LOSS,
+                        atk_holder: batch_atks
                     }
                 """[res0, res1, res2] = sess.run([model.adv, model.fake, model.cross_entropy],
                                         feed_dict=feed_dict)
@@ -547,46 +538,33 @@ def train():
             # Update Pixel bound
             if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
                 curr_valid_acc = valid_dict["adv_acc"] 
-                absolute_diff = curr_valid_acc - prev_valid_acc
-                if curr_valid_acc != 0:
-                    acc_change_ratio =  absolute_diff / curr_valid_acc
-                else:
-                    acc_change_ratio = 0.0
-                # FLAGS.ABS_DIFF_THRESHOLD 5e-4
-                if prev_valid_acc != 0.0 and absolute_diff > FLAGS.ABS_DIFF_THRESHOLD and acc_change_ratio > FLAGS.ADAPTIVE_UP_THRESHOLD: # roll back
+                acc_change_ratio = (curr_valid_acc - prev_valid_acc) / curr_valid_acc
+                if epoch != 0 and acc_change_ratio > FLAGS.ADAPTIVE_UP_THRESHOLD: # roll back
                     # reset
                     prev_valid_acc = last_prev_valid_acc
                     change_itr = last_change_itr
                     FLAGS.PIXEL_BOUND = last_pixel_bound
-                    FLAGS.BETA_X_TRUE = last_beta_x_true
-                    FLAGS.BETA_X_FAKE = last_beta_x_fake
                     FLAGS.BETA_Y_TRANS = last_beta_y_trans
-                    FLAGS.BETA_Y_FAKE = last_beta_y_fake
                     FLAGS.BETA_Y_CLEAN = last_beta_y_clean
                     # update bound change rate
                     FLAGS.BOUND_CHANGE_RATE = FLAGS.BOUND_CHANGE_RATE * FLAGS.ADAPTIVE_BOUND_INC_RATE
                 
                 else:
-                    if prev_valid_acc != 0.0 and acc_change_ratio < FLAGS.ADAPTIVE_LOW_THRESHOLD: # sppedup
+                    if epoch != 0 and acc_change_ratio < FLAGS.ADAPTIVE_LOW_THRESHOLD: # sppedup
                         FLAGS.BOUND_CHANGE_RATE = FLAGS.BOUND_CHANGE_RATE * FLAGS.ADAPTIVE_BOUND_DEC_RATE
                     # save from previous
                     last_change_itr = change_itr
                     last_prev_valid_acc = prev_valid_acc
                     last_pixel_bound = FLAGS.PIXEL_BOUND
-                    last_beta_x_true = FLAGS.BETA_X_TRUE
-                    last_beta_x_fake = FLAGS.BETA_X_FAKE
                     last_beta_y_trans = FLAGS.BETA_Y_TRANS
-                    last_beta_y_fake = FLAGS.BETA_Y_FAKE
                     last_beta_y_clean = FLAGS.BETA_Y_CLEAN
                     # update for following use
                     change_itr += 1
                     prev_valid_acc = curr_valid_acc
                     FLAGS.PIXEL_BOUND = model_utils.change_coef(INIT_PIXEL_BOUND,  FLAGS.BOUND_CHANGE_RATE, change_itr,
                                                                 FLAGS.BOUND_CHANGE_TYPE)
-                    FLAGS.BETA_X_TRUE = INIT_BETA_X_TRUE * FLAGS.BETA_X_TRUE_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
-                    FLAGS.BETA_X_FAKE = INIT_BETA_X_FAKE * FLAGS.BETA_X_FAKE_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
+
                     FLAGS.BETA_Y_TRANS = INIT_BETA_Y_TRANS * FLAGS.BETA_Y_TRANS_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
-                    FLAGS.BETA_Y_FAKE = INIT_BETA_Y_FAKE * FLAGS.BETA_Y_FAKE_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
                     FLAGS.BETA_Y_CLEAN = INIT_BETA_Y_CLEAN * FLAGS.BETA_Y_CLEAN_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)               
                     
                 

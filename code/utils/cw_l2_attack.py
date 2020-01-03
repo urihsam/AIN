@@ -8,22 +8,23 @@
 import sys
 import tensorflow as tf
 import numpy as np
+from dependency import *
 
 BINARY_SEARCH_STEPS = 9  # number of times to adjust the constant with binary search
 MAX_ITERATIONS = 10000   # number of iterations to perform gradient descent
 ABORT_EARLY = True       # if we stop improving, abort gradient descent early
 LEARNING_RATE = 1e-2     # larger values converge faster to less accurate results
-TARGETED = True          # should we target one specific class? or just be wrong?
+TARGETED = False          # should we target one specific class? or just be wrong?
 CONFIDENCE = 0           # how strong the adversarial example should be
 INITIAL_CONST = 1e-3     # the initial constant c to pick as a first guess
 
 class cwl2:
-    def __init__(self, model,
+    def __init__(self, model, model_scope, dataset_type="tiny",
                  confidence = CONFIDENCE, targeted = TARGETED, learning_rate = LEARNING_RATE,
                  binary_search_steps = BINARY_SEARCH_STEPS, max_iterations = MAX_ITERATIONS,
                  abort_early = ABORT_EARLY, 
                  initial_const = INITIAL_CONST,
-                 boxmin = -0.5, boxmax = 0.5):
+                 boxmin = -0.5, boxmax = 0.5, scope=None):
         """
         The L_2 optimized attack. 
 
@@ -64,6 +65,7 @@ class cwl2:
         self.CONFIDENCE = confidence
         self.initial_const = initial_const
         self.batch_size = batch_size
+        self.dataset_type = dataset_type
 
         self.repeat = binary_search_steps >= 10
 
@@ -72,25 +74,28 @@ class cwl2:
         shape = (batch_size, image_rows, image_cols, num_channels)
         
         # the variable we're going to optimize over
-        modifier = tf.Variable(np.zeros(shape,dtype=np.float32))
+        with tf.variable_scope(scope):
+            modifier = tf.Variable(np.zeros(shape,dtype=np.float32))
 
-        # these are variables to be more efficient in sending data to tf
-        self.timg = tf.Variable(np.zeros(shape), dtype=tf.float32)
-        self.tlab = tf.Variable(np.zeros((batch_size,num_labels)), dtype=tf.float32)
-        self.const = tf.Variable(np.zeros(batch_size), dtype=tf.float32)
+            # these are variables to be more efficient in sending data to tf
+            self.timg = tf.Variable(np.zeros(shape), dtype=tf.float32)
+            self.tlab = tf.Variable(np.zeros((batch_size,num_labels)), dtype=tf.float32)
+            self.const = tf.Variable(np.zeros(batch_size), dtype=tf.float32)
 
-        # and here's what we use to assign them
-        self.assign_timg = tf.placeholder(tf.float32, shape)
-        self.assign_tlab = tf.placeholder(tf.float32, (batch_size,num_labels))
-        self.assign_const = tf.placeholder(tf.float32, [batch_size])
-        
-        # the resulting image, tanh'd to keep bounded from boxmin to boxmax
-        self.boxmul = (boxmax - boxmin) / 2.
-        self.boxplus = (boxmin + boxmax) / 2.
-        self.newimg = tf.tanh(modifier + self.timg) * self.boxmul + self.boxplus
+            # and here's what we use to assign them
+            self.assign_timg = tf.placeholder(tf.float32, shape)
+            self.assign_tlab = tf.placeholder(tf.float32, (batch_size,num_labels))
+            self.assign_const = tf.placeholder(tf.float32, [batch_size])
+            
+            # the resulting image, tanh'd to keep bounded from boxmin to boxmax
+            self.boxmul = (boxmax - boxmin) / 2.
+            self.boxplus = (boxmin + boxmax) / 2.
+            self.newimg = tf.tanh(modifier + self.timg) * self.boxmul + self.boxplus
         
         # prediction BEFORE-SOFTMAX of the model
-        self.output, _ = model.prediction(self.newimg)
+        with tf.variable_scope(model_scope, reuse=True):
+            self.t_model = model
+            self.output, _ = self.t_model.prediction(self.newimg)
         
         # distance to the input data
         self.l2dist = tf.reduce_sum(tf.square(self.newimg-(tf.tanh(self.timg) * self.boxmul + self.boxplus)),[1,2,3])
@@ -110,21 +115,23 @@ class cwl2:
         self.loss2 = tf.reduce_sum(self.l2dist)
         self.loss1 = tf.reduce_sum(self.const*loss1)
         self.loss = self.loss1+self.loss2
-        
+        #import pdb; pdb.set_trace()
         # Setup the adam optimizer and keep track of variables we're creating
-        start_vars = set(x.name for x in tf.global_variables())
+        #start_vars = set(x.name for x in tf.global_variables())
+        #start_vars = set(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope))
         optimizer = tf.train.AdamOptimizer(self.LEARNING_RATE)
         self.train = optimizer.minimize(self.loss, var_list=[modifier])
-        end_vars = tf.global_variables()
-        new_vars = [x for x in end_vars if x.name not in start_vars]
-
+        #end_vars = tf.global_variables()
+        end_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope)
+        #new_vars = [x for x in end_vars if x.name not in start_vars]
         # these are the variables to initialize when we run
         self.setup = []
         self.setup.append(self.timg.assign(self.assign_timg))
         self.setup.append(self.tlab.assign(self.assign_tlab))
         self.setup.append(self.const.assign(self.assign_const))
         
-        self.init = tf.variables_initializer(var_list=[modifier]+new_vars)
+        #self.init = tf.variables_initializer(var_list=[modifier]+new_vars)
+        self.init = tf.variables_initializer(var_list=end_vars)
 
     def attack(self, sess, imgs, targets):
         """
@@ -160,7 +167,7 @@ class cwl2:
         batch_size = self.batch_size
 
         # convert to tanh-space
-        imgs = np.arctanh((imgs - self.boxplus) / self.boxmul * 0.999999)
+        imgs = np.arctanh((imgs - self.boxplus) / self.boxmul * 0.99999999)
 
         # set the lower and upper bounds accordingly
         lower_bound = np.zeros(batch_size)
@@ -176,6 +183,10 @@ class cwl2:
             print(o_bestl2)
             # completely reset adam's internal state.
             sess.run(self.init)
+            if self.dataset_type == "tiny":
+                self.t_model.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
+            elif self.dataset_type == "mnist":
+                self.t_model.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
             batch = imgs[:batch_size]
             batchlab = labs[:batch_size]
     
@@ -191,6 +202,8 @@ class cwl2:
                                        self.assign_tlab: batchlab,
                                        self.assign_const: CONST})
             
+            #import pdb; pdb.set_trace()
+            res = sess.run(self.output)
             prev = 1e6
             for iteration in range(self.MAX_ITERATIONS):
                 # perform the attack 
