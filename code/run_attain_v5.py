@@ -553,7 +553,7 @@ def train():
                 else:
                     acc_change_ratio = 0.0
                 # FLAGS.ABS_DIFF_THRESHOLD 5e-4
-                if prev_valid_acc != 0.0 and absolute_diff > FLAGS.ABS_DIFF_THRESHOLD and acc_change_ratio > FLAGS.ADAPTIVE_UP_THRESHOLD: # roll back
+                if absolute_diff > FLAGS.ABS_DIFF_THRESHOLD and acc_change_ratio > FLAGS.ADAPTIVE_UP_THRESHOLD: # roll back
                     # reset
                     prev_valid_acc = last_prev_valid_acc
                     change_itr = last_change_itr
@@ -567,7 +567,7 @@ def train():
                     FLAGS.BOUND_CHANGE_RATE = FLAGS.BOUND_CHANGE_RATE * FLAGS.ADAPTIVE_BOUND_INC_RATE
                 
                 else:
-                    if prev_valid_acc != 0.0 and acc_change_ratio < FLAGS.ADAPTIVE_LOW_THRESHOLD: # sppedup
+                    if acc_change_ratio < FLAGS.ADAPTIVE_LOW_THRESHOLD: # sppedup
                         FLAGS.BOUND_CHANGE_RATE = FLAGS.BOUND_CHANGE_RATE * FLAGS.ADAPTIVE_BOUND_DEC_RATE
                     # save from previous
                     last_change_itr = change_itr
@@ -581,7 +581,7 @@ def train():
                     # update for following use
                     change_itr += 1
                     prev_valid_acc = curr_valid_acc
-                    FLAGS.PIXEL_BOUND = model_utils.change_coef(INIT_PIXEL_BOUND,  FLAGS.BOUND_CHANGE_RATE, change_itr,
+                    FLAGS.PIXEL_BOUND = model_utils.change_coef(last_pixel_bound,  FLAGS.BOUND_CHANGE_RATE, change_itr,
                                                                 FLAGS.BOUND_CHANGE_TYPE)
                     FLAGS.BETA_X_TRUE = INIT_BETA_X_TRUE * FLAGS.BETA_X_TRUE_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
                     FLAGS.BETA_X_FAKE = INIT_BETA_X_FAKE * FLAGS.BETA_X_FAKE_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)

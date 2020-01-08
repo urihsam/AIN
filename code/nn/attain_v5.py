@@ -74,6 +74,28 @@ class ATTAIN:
             else:
                 self._mask_states = None
 
+            if FLAGS.ADD_RANDOM:
+                with tf.variable_scope("random"):
+                    row = 8
+                    col = 8
+                    cha = 1024
+                    img_shape = [row, col, cha]
+                    size = np.prod(img_shape)
+                    w1_shape = [label.get_shape().as_list()[-1], size]
+                    w1 = ne.weight_variable(w1_shape, "lbl_W1", init_type="HE")
+                    b1 = ne.bias_variable([size], "lbl_b1")
+                    label_states = ne.sigmoid(ne.fully_conn(label, w1, b1))
+                    label_states = ne.layer_norm(label_states, self.is_training)
+                    #
+                    w2_shape = [size, label.get_shape().as_list()[-1]]
+                    w2 = ne.weight_variable(w2_shape, "lbl_W2", init_type="HE")
+                    b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "lbl_b2")
+                    self._recon_label_3 = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
+                    #
+                    self._random_states = tf.reshape(label_states, [-1] + img_shape)
+            else:
+                self._random_states = None
+
         with tf.variable_scope('autoencoder'):
             if FLAGS.AE_TYPE == "ATTAE":
                 # Encoder
@@ -95,10 +117,13 @@ class ATTAIN:
                         res_leaky_ratio=0.2,
                         res_drop_rate=0.4,
                         out_channel_size=self.central_channel_size,
+                        # random noise
+                        add_random_noise=FLAGS.ADD_RANDOM, mean=0.0, stddev=0.01,
                         out_norm=FLAGS.ENC_OUT_NORM,
                         use_norm=FLAGS.ENC_NORM,
                         img_channel=FLAGS.NUM_CHANNELS)
-                    self._central_states = self._encoder.evaluate(self.data, self.is_training, self._label_states)
+                    self._central_states = self._encoder.evaluate(self.data, self.is_training, 
+                                           self._label_states, self._random_states)
                 
                 # Decoder
                 with tf.variable_scope(FLAGS.DEC_NAME) as dec_scope:
@@ -439,18 +464,25 @@ class ATTAIN:
 
     @lazy_property
     def pre_loss_label(self):
+        loss = 0
         cross_entropy = -tf.reduce_sum(
             self.label * tf.log(1e-5+self._recon_label) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label),
             axis = 1
         )
+        loss += tf.reduce_mean(cross_entropy)
         if FLAGS.USE_LABEL_MASK:
             cross_entropy_2 = -tf.reduce_sum(
                 self.label * tf.log(1e-5+self._recon_label_2) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label_2),
                 axis = 1
             )
-            return tf.reduce_mean(cross_entropy) + tf.reduce_mean(cross_entropy_2)
-        else:
-            return tf.reduce_mean(cross_entropy)
+            loss += tf.reduce_mean(cross_entropy_2)
+        if FLAGS.ADD_RANDOM:
+            cross_entropy_3 = -tf.reduce_sum(
+                self.label * tf.log(1e-5+self._recon_label_3) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label_3),
+                axis = 1
+            )
+            loss += tf.reduce_mean(cross_entropy_3)
+        return loss
 
     
     @lazy_property

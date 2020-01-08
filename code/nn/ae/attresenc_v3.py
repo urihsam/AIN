@@ -51,6 +51,10 @@ class ATTRESENC(ABCCNN):
                  out_padding = "SAME",
                  out_channel_size=3,
                  out_leaky_ratio=0.2,
+                 # random noise
+                 add_random_noise = False,
+                 mean = 0.0,
+                 stddev = 0.1,
                  # img channel
                  img_channel=None,
                  # switch
@@ -126,6 +130,10 @@ class ATTRESENC(ABCCNN):
             self.out_padding = out_padding
             self.out_channel_size = out_channel_size
             self.out_leaky_ratio = out_leaky_ratio
+        # random noise
+        self.add_random_noise = add_random_noise
+        self.mean = mean
+        self.stddev = stddev
         # img channel
         if img_channel == None:
             self.img_channel = FLAGS.NUM_CHANNELS
@@ -328,14 +336,33 @@ class ATTRESENC(ABCCNN):
         #import pdb; pdb.set_trace()
         return net
 
+    @lazy_method
+    def random_noise_layer(self, inputs, random_mask):
+        net = inputs
+        random_noise = tf.random_normal(tf.shape(net), mean=self.mean, stddev=self.stddev)
+        if random_mask != None:
+            random_noise = tf.multiply(random_mask, random_noise)
+        net += random_noise
+        if self.use_norm == "BATCH":
+            net = ne.batch_norm(net, self.is_training)
+        elif self.use_norm == "LAYER":
+            net = ne.layer_norm(net, self.is_training)
+        elif self.use_norm == "INSTA":
+            net = ne.instance_norm(net, self.is_training)
+        net = tf.identity(net, name='rand_output')
+        return net
+
 
     @lazy_method
-    def evaluate(self, data, is_training, label_states):
+    def evaluate(self, data, is_training, label_states, random_states):
         self.is_training = is_training
         conv_res = self.conv_res_groups(data, label_states)
         #assert res.get_shape().as_list()[1:] == self.res_out_shape
         if self.use_out_layer:
             conv_res = self.out_layer(conv_res)
+        if self.add_random_noise:
+            print("random noise added")
+            conv_res = self.random_noise_layer(conv_res, random_states)
         return conv_res
 
 

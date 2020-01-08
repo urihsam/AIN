@@ -72,7 +72,7 @@ class dataset(object):
         for class_idx in range(FLAGS.NUM_CLASSES):
             class_name = str(class_idx)
             data_dir = self.train_dir + "/" + class_name + "/" + self.image_dir
-            train_img_names_list = tf.gfile.Glob(os.path.join(data_dir, '*.JPEG'))
+            train_img_names_list = tf.gfile.Glob(os.path.join(data_dir, '*.npy'))
             train_class_names_list = [class_name] * len(train_img_names_list)
             train_img_names_classes_list += fuse(train_img_names_list, train_class_names_list)
         random.shuffle(train_img_names_classes_list)
@@ -86,24 +86,27 @@ class dataset(object):
         for class_idx in range(FLAGS.NUM_CLASSES):
             class_name = str(class_idx)
             data_dir = self.test_dir + "/" + class_name + "/" + self.image_dir
-            test_img_names_list = tf.gfile.Glob(os.path.join(data_dir, '*.JPEG'))
+            test_img_names_list = tf.gfile.Glob(os.path.join(data_dir, '*.npy'))
             test_class_names_list = [class_name] * len(test_img_names_list)
             test_img_names_classes_list += fuse(test_img_names_list, test_class_names_list)
         return test_img_names_classes_list
     
     # Load images using the list of tuple in format (image file path, image class name)
-    def _load_image(self, img_name_class, onehot, normalize, biased):
+    def _load_image(self, img_name_class, onehot, normalize, biased, is_np=True):
         file_path, class_name = img_name_class
         path = os.path.join(file_path)
-        im = Image.open(path)
-        image = np.asarray(im)
-        if FLAGS.NUM_CHANNELS == 1:
-            image = np.expand_dims(image, axis=2)
-        if image.shape != (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS):
-            # e.g. grayscale
-            return None
-        assert image.dtype == np.uint8
-        image = image.astype(np.float32)
+        if is_np: # np file
+            image = np.load(path)
+        else:
+            im = Image.open(path)
+            image = np.asarray(im)
+            if FLAGS.NUM_CHANNELS == 1:
+                image = np.expand_dims(image, axis=2)
+            if image.shape != (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS):
+                # e.g. grayscale
+                return None
+            assert image.dtype == np.uint8
+            image = image.astype(np.float32)
         assert image.shape == (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS)
         # print(image.shape, file_path)
         if normalize:

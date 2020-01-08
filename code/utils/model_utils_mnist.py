@@ -54,6 +54,7 @@ def set_flags():
     # AE params
     flags.DEFINE_integer("BOTTLENECK", 2048, "The size of bottleneck")
     flags.DEFINE_bool("USE_LABEL_MASK", False, "Whether use label mask or not")
+    flags.DEFINE_bool("ADD_RANDOM", False, "Whether add random noise to central states or not")
     # Loss params
     flags.DEFINE_string("LOSS_MODE_TRANS", "C_W2", "How to calculate loss from fake imgae") # ENTRO, C_W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C_W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C_W
@@ -181,10 +182,11 @@ def init_writer(LOG_DIR, graph):
     #writer.add_graph(graph)# tensorboard
     return writer
 
-def change_coef(init_value, change_rate, change_itr, change_type="STEP"):
+def change_coef(last_value, change_rate, change_itr, change_type="STEP"):
     if change_type == "STEP":
-        return init_value * change_rate ** change_itr
+        return last_value * change_rate
     elif change_type == "EXP":
-        return init_value * np.exp(change_rate * change_itr)
+        return last_value * np.exp(change_rate)
     elif change_type == "TIME":
+        init_value = last_value * (1.0 + change_rate * (change_itr-1))
         return init_value / (1.0 + change_rate * change_itr)
