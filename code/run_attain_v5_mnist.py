@@ -9,7 +9,7 @@ from utils.data_utils_mnist import dataset
 
 model_utils.set_flags()
 
-data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
+data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED, adv_path_prefix=FLAGS.ADV_PATH_PREFIX)
 
 
 def main(arvg=None):
@@ -160,7 +160,7 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             max_dist_true, max_dist_fake, max_dist_trans))
         file.write("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f} \n".format(
             Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
-        file.write("############################################")
+        file.write("############################################\n")
     
     res_dict = {"acc": acc, 
                 "fake_acc": fake_acc,
@@ -213,7 +213,8 @@ def test():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
+        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, 
+            is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -249,36 +250,44 @@ def test():
         test_info(sess, model, test_writer, graph_dict, "test_log.txt", total_batch=total_test_batch)
         test_writer.close() 
         
-        batch_xs, batch_ys, batch_atks = data.next_test_batch(FLAGS.BATCH_SIZE, False)
+        '''
+        batch_xs, batch_ys, batch_path = data.next_test_batch(FLAGS.BATCH_SIZE, True)
+        np.save("test_plot_clean_img.npy", batch_xs[0:10])
+        np.save("test_plot_clean_y.npy", batch_ys[0:10])
+        np.save("test_plot_clean_path.npy", batch_path[0:10])
+        '''
+        batch_xs = np.load("test_plot_clean_img.npy")
+        batch_ys = np.load("test_plot_clean_y.npy")
         feed_dict = {
             images_holder: batch_xs,
             label_holder: batch_ys,
-            atk_holder: batch_atks,
             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
             is_training: False
         }
         adv_images = sess.run(model.prediction, feed_dict=feed_dict)
-        width = 10*32
-        height = 2*32
-        new_im = Image.new('RGB', (width, height))
+        
+        width = 10*28
+        height = 2*28
+        new_im = Image.new('L', (width, height))
         x_offset = 0
-        y_offset = 32
+        y_offset = 28
         for i in range(10):
-            im1 = Image.fromarray(np.uint8(batch_xs[i]*255.0))
-            im2 = Image.fromarray(np.uint8(adv_images[i]*255.0))
+            im1 = Image.fromarray(np.reshape((batch_xs[i] * 255).astype(np.uint8), (28,28)))
+            im2 = Image.fromarray(np.reshape((adv_images[i]*255).astype(np.uint8), (28, 28)))
             new_im.paste(im1, (x_offset, 0))
             new_im.paste(im2, (x_offset, y_offset))
             x_offset += im1.size[0]
 
         new_im.show()
-        new_im.save('AIN_results.jpg')
+        new_im.save('AttAIN_MNIST_UNTGT_results.jpg')
 
 
 def train():
     """
     """
     INIT_PIXEL_BOUND = FLAGS.PIXEL_BOUND
+    INIT_BOUND_CHANGE_RATE = FLAGS.BOUND_CHANGE_RATE
     INIT_BETA_X_TRUE = FLAGS.BETA_X_TRUE
     INIT_BETA_X_FAKE = FLAGS.BETA_X_FAKE
     INIT_BETA_Y_TRANS = FLAGS.BETA_Y_TRANS
@@ -345,6 +354,7 @@ def train():
         if FLAGS.load_AE:
             print("Autoencoder loaded.")
             model.tf_load(sess)
+            #model.tf_load(sess, name='deep_cae_last.ckpt')
             model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         # For tensorboard
         train_writer = model_utils.init_writer(FLAGS.TRAIN_LOG_PATH, g)
@@ -361,8 +371,6 @@ def train():
             total_valid_batch = None
             total_pre_valid_batch = int(data.valid_size/FLAGS.BATCH_SIZE)
         
-        min_adv_acc = np.Inf
-        alert_count = 0
 
         if FLAGS.train_label:
             print("Pre-training...")
@@ -413,6 +421,11 @@ def train():
         last_beta_y_trans = INIT_BETA_Y_TRANS 
         last_beta_y_fake = INIT_BETA_Y_FAKE
         last_beta_y_clean = INIT_BETA_Y_CLEAN
+        ###
+        roll_back_pixel = INIT_PIXEL_BOUND
+        roll_back_hit = 0
+        min_valid_acc = FLAGS.INIT_MIN_VALID_ACC
+        last_min_valid_acc = 1.0
         for epoch in range(FLAGS.NUM_EPOCHS):
             start_time = time.time()
             for train_idx in range(total_train_batch):
@@ -506,7 +519,7 @@ def train():
                     print("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
                         Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
                     print()
-                    model.tf_save(sess) # save checkpoint
+                    #model.tf_save(sess) # save checkpoint
                     
                 if FLAGS.PARTIAL_LOSS != "FULL_LOSS":
                     if train_idx % FLAGS.LOSS_CHANGE_FREQUENCY == (FLAGS.LOSS_CHANGE_FREQUENCY - 1):
@@ -524,11 +537,15 @@ def train():
             valid_dict = test_info(sess, model, valid_writer, graph_dict, "valid_log.txt", total_batch=total_valid_batch, valid=True)
             
 
-            if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1:
+            #if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1: # stop
+            if valid_dict["max_dist_true"] <= valid_dict["max_dist_trans"]: # stop
                 break
             else:
-                model.tf_save(sess)
-                print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
+                if valid_dict["adv_acc"] <= min_valid_acc:
+                    print("Find model at bound step {} has smaller valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
+                    model.tf_save(sess)
+                    min_valid_acc = valid_dict["adv_acc"]
+                    print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
             
             print("******************************************************************")
             print()
@@ -537,14 +554,29 @@ def train():
              
             # Update Pixel bound
             if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
-                curr_valid_acc = valid_dict["adv_acc"] 
+                curr_valid_acc = min_valid_acc # min valid acc for current bound
+                model.tf_load(sess) # corresponding model for min valid acc
+                valid_dict = test_info(sess, model, valid_writer, graph_dict, "valid_log.txt", total_batch=total_valid_batch, valid=True)
+                print()
+                print("Changing bounds...")
+                print("Roll back hit: {}".format(roll_back_hit))
+                print("Validation accuracy of the current bound step: {}".format(curr_valid_acc))
+                print("Validation accuracy of the previous bound step: {}".format(prev_valid_acc))
+                print("Validation accuracy of the model restored: {}".format(valid_dict["adv_acc"]))
+                
+
                 absolute_diff = curr_valid_acc - prev_valid_acc
                 if curr_valid_acc != 0:
                     acc_change_ratio =  absolute_diff / curr_valid_acc
                 else:
                     acc_change_ratio = 0.0
                 # FLAGS.ABS_DIFF_THRESHOLD 5e-4
-                if absolute_diff > FLAGS.ABS_DIFF_THRESHOLD and acc_change_ratio > FLAGS.ADAPTIVE_UP_THRESHOLD: # roll back
+                # change_itr != 0 : not first time
+                if change_itr != 0 and roll_back_hit < FLAGS.ROLL_BACK_THRESHOLD and absolute_diff > FLAGS.ABS_DIFF_THRESHOLD and acc_change_ratio > FLAGS.ADAPTIVE_UP_THRESHOLD: # roll back
+                    # reset model
+                    model.tf_load(sess, name='deep_cae_last.ckpt')
+                    model.tf_save(sess)
+                    min_valid_acc = last_min_valid_acc
                     # reset
                     prev_valid_acc = last_prev_valid_acc
                     change_itr = last_change_itr
@@ -555,11 +587,23 @@ def train():
                     FLAGS.BETA_Y_FAKE = last_beta_y_fake
                     FLAGS.BETA_Y_CLEAN = last_beta_y_clean
                     # update bound change rate
+                    if FLAGS.BOUND_CHANGE_RATE < INIT_BOUND_CHANGE_RATE:
+                        FLAGS.BOUND_CHANGE_RATE = INIT_BOUND_CHANGE_RATE
                     FLAGS.BOUND_CHANGE_RATE = FLAGS.BOUND_CHANGE_RATE * FLAGS.ADAPTIVE_BOUND_INC_RATE
-                
+                    # update roll back
+                    if last_pixel_bound == roll_back_pixel:
+                        roll_back_hit += 1
+                    else:
+                        roll_back_pixel = last_pixel_bound
+                        roll_back_hit = 0
                 else:
-                    if acc_change_ratio < FLAGS.ADAPTIVE_LOW_THRESHOLD: # sppedup
+                    if roll_back_hit == 0 and acc_change_ratio < FLAGS.ADAPTIVE_LOW_THRESHOLD: # sppedup
                         FLAGS.BOUND_CHANGE_RATE = FLAGS.BOUND_CHANGE_RATE * FLAGS.ADAPTIVE_BOUND_DEC_RATE
+                    if roll_back_pixel != FLAGS.PIXEL_BOUND and roll_back_hit >= FLAGS.ROLL_BACK_THRESHOLD:
+                        roll_back_hit = 0
+                    # save current for following use
+                    model.tf_save(sess, name='deep_cae_last.ckpt')
+                    last_min_valid_acc = min_valid_acc
                     # save from previous
                     last_change_itr = change_itr
                     last_prev_valid_acc = prev_valid_acc
@@ -572,15 +616,17 @@ def train():
                     # update for following use
                     change_itr += 1
                     prev_valid_acc = curr_valid_acc
+                    min_valid_acc = 1.0
                     FLAGS.PIXEL_BOUND = model_utils.change_coef(last_pixel_bound,  FLAGS.BOUND_CHANGE_RATE, change_itr,
                                                                 FLAGS.BOUND_CHANGE_TYPE)
+                    if last_pixel_bound - FLAGS.PIXEL_BOUND < 8e-5:
+                        FLAGS.BOUND_CHANGE_RATE = INIT_BOUND_CHANGE_RATE
                     FLAGS.BETA_X_TRUE = INIT_BETA_X_TRUE * FLAGS.BETA_X_TRUE_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
                     FLAGS.BETA_X_FAKE = INIT_BETA_X_FAKE * FLAGS.BETA_X_FAKE_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
                     FLAGS.BETA_Y_TRANS = INIT_BETA_Y_TRANS * FLAGS.BETA_Y_TRANS_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
                     FLAGS.BETA_Y_FAKE = INIT_BETA_Y_FAKE * FLAGS.BETA_Y_FAKE_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)
                     FLAGS.BETA_Y_CLEAN = INIT_BETA_Y_CLEAN * FLAGS.BETA_Y_CLEAN_CHANGE_RATE * math.ceil(INIT_PIXEL_BOUND / FLAGS.PIXEL_BOUND)               
                     
-                
                 # reset learning rate
                 sess.run(fetches=[model_lr_reset_op])
 

@@ -25,7 +25,8 @@ class dataset(object):
     
     """
     def __init__(self, data_dir, image_dir="images", split_ratio=0.5, 
-                 onehot=True, normalize=True, biased=True):
+                 onehot=True, normalize=True, biased=True,
+                 adv_path_prefix="fgsm"):
         print("Dataset here")
         self.data_dir = data_dir
         self.train_dir = self.path("train")
@@ -36,6 +37,7 @@ class dataset(object):
         self.onehot = onehot
         self.normalize = normalize
         self.biased = biased
+        self.adv_path_prefix = adv_path_prefix
         # Load the names of all classes
         self._class_names = self._get_class_names_from_wnids()
         # Build an encoding dictionary to map from class names to integer label
@@ -191,7 +193,7 @@ class dataset(object):
                 if not with_path:
                     # atk
                     path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                    atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
                     atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
                                                self.onehot, self.normalize, self.biased,
                                                is_np=True)
@@ -229,7 +231,7 @@ class dataset(object):
                 if not with_path:
                     # atk
                     path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                    atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
                     atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
                                                self.onehot, self.normalize, self.biased,
                                                is_np=True)
@@ -266,7 +268,7 @@ class dataset(object):
                 if not with_path:
                     # atk
                     path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                    atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
                     atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
                                                self.onehot, self.normalize, self.biased,
                                                is_np=True)

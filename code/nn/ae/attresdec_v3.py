@@ -371,13 +371,27 @@ class ATTRESDEC(ABCCNN):
         generated = self.decv_res_groups(inputs, mask_states)
         #generated = ne.brelu(generated, self.output_low_bound, self.output_up_bound) # clipping the final result 
 
+        # dense, uniform
+        
         ratio = 0.8
         maximum = tf.reduce_max(generated) * ratio
         minimum = tf.reduce_min(generated) * ratio
         positive = tf.minimum(tf.maximum(generated, 0.0), maximum) / maximum * self.output_up_bound
         negative = tf.maximum(tf.minimum(generated, 0.0), minimum) / minimum * self.output_low_bound
         generated = negative + positive
-        #assert generated.get_shape().as_list()[1:] == self.decv_out_shape
+        '''
+        #
+        # sparse, nonuniform
+        #import pdb; pdb.set_trace()
+        generated_shape = generated.get_shape().as_list()[1:]
+        l2_norm = tf.sqrt(tf.reduce_sum(tf.square(ne.flatten(generated)), 1))
+        generated = tf.divide(ne.flatten(generated), tf.expand_dims(l2_norm, axis=1))
+        generated = tf.reshape(generated, [-1]+generated_shape)
+        maximum = tf.maximum(tf.reduce_max(generated), -tf.reduce_min(generated))
+        generated = generated / maximum * self.output_up_bound
+        #generated = tf.minimum(tf.maximum(generated, self.output_low_bound), self.output_up_bound)
+        '''
+
         return generated
 
     def tf_load(self, sess, path, scope, name='deep_resdec.ckpt', spec=""):

@@ -242,14 +242,16 @@ class ATTRESDEC(ABCCNN):
         net = inputs
         f = ne.conv2d(net, filters=self.att_filters[W_name+"f_0"], biases=None,
                       strides=self.att_f_strides, padding=self.att_f_padding) # [b, h, w, c]
-        if self.attention_type == "GOOGLE":
-            f = ne.max_pool_2x2(f)
         g = ne.conv2d(net, filters=self.att_filters[W_name+"g_0"], biases=None,
                       strides=self.att_g_strides, padding=self.att_g_padding) # [b, h, w, c]
         h = ne.conv2d(net, filters=self.att_filters[W_name+"h_0"], biases=None,
                       strides=self.att_h_strides, padding=self.att_h_padding) # [b, h, w, c]
         if self.attention_type == "GOOGLE":
-            h = ne.max_pool_2x2(h)
+            f = ne.max_pool_2x2(f) # [b, h/2, w/2, c]
+            h = ne.max_pool_2x2(h) # [b, h/2, w/2, c]
+        elif self.attention_type == "DUOCONV":
+            f = ne.max_pool_2x2(ne.max_pool_2x2(f)) # [b, h/4, w/4, c]
+            h = ne.max_pool_2x2(ne.max_pool_2x2(h)) # [b, h/4, w/4, c]
 
         # N = h * w
         s = tf.matmul(ne.hw_flatten(g), ne.hw_flatten(f), transpose_b=True) # [b, N, N]
@@ -344,7 +346,7 @@ class ATTRESDEC(ABCCNN):
                             net = ne.layer_norm(net, self.is_training)
                         elif self.use_norm == "INSTA":
                             net = ne.instance_norm(net, self.is_training)
-                
+                #import pdb; pdb.set_trace()
             return net
 
         net = inputs
@@ -361,33 +363,34 @@ class ATTRESDEC(ABCCNN):
 
 
     @lazy_method
-    def evaluate(self, inputs, is_training, mask_states, x):
+    def evaluate(self, inputs, is_training, mask_states):
         self.is_training = is_training
         #assert inputs.get_shape().as_list()[1:] == self.res_in_shape
         if self.use_in_layer:
             inputs = self.in_layer(inputs)
         generated = self.decv_res_groups(inputs, mask_states)
+        #generated = ne.brelu(generated, self.output_low_bound, self.output_up_bound) # clipping the final result 
 
-        positive = tf.maximum(generated, 0.0) # >=0
-        negative = tf.minimum(generated, 0.0) # <=0
-        pos_scale = tf.subtract(1.0, x) # >=0
-        neg_scale = tf.subtract(x, 0.0) # >=0
-
+        # dense, uniform
+        '''
         ratio = 0.8
-        maximum = tf.reduce_max(positive) * ratio # >=0
-        minimum = tf.reduce_min(negative) * ratio # <=0
-        positive = tf.minimum(positive, maximum) / maximum # >=0
-        negative = tf.maximum(negative, minimum) / minimum # >=0
-        #
-        pos_bounds = tf.minimum(pos_scale, self.output_up_bound) # >=0
-        positive = tf.multiply(pos_bounds, positive) # >=0
-
-        neg_bounds = tf.maximum(-1.0*neg_scale, self.output_low_bound) # <=0
-        negative = tf.multiply(neg_bounds, negative) # <=0
-        #
+        maximum = tf.reduce_max(generated) * ratio
+        minimum = tf.reduce_min(generated) * ratio
+        positive = tf.minimum(tf.maximum(generated, 0.0), maximum) / maximum * self.output_up_bound
+        negative = tf.maximum(tf.minimum(generated, 0.0), minimum) / minimum * self.output_low_bound
         generated = negative + positive
+        '''
+        #
+        # sparse, nonuniform
+        #import pdb; pdb.set_trace()
+        generated_shape = generated.get_shape().as_list()[1:]
+        l2_norm = tf.sqrt(tf.reduce_sum(tf.square(ne.flatten(generated)), 1))
+        generated = tf.divide(ne.flatten(generated), tf.expand_dims(l2_norm, axis=1))
+        generated = tf.reshape(generated, [-1]+generated_shape)
+        maximum = tf.maximum(tf.reduce_max(generated), -tf.reduce_min(generated))
+        generated = generated / maximum * self.output_up_bound
+        #generated = tf.minimum(tf.maximum(generated, self.output_low_bound), self.output_up_bound)
 
-        #assert generated.get_shape().as_list()[1:] == self.decv_out_shape
         return generated
 
     def tf_load(self, sess, path, scope, name='deep_resdec.ckpt', spec=""):

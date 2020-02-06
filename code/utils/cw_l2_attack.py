@@ -11,18 +11,20 @@ import numpy as np
 from dependency import *
 
 BINARY_SEARCH_STEPS = 9  # number of times to adjust the constant with binary search
-MAX_ITERATIONS = 10000   # number of iterations to perform gradient descent
+#MAX_ITERATIONS = 10000   # number of iterations to perform gradient descent
 ABORT_EARLY = True       # if we stop improving, abort gradient descent early
-LEARNING_RATE = 1e-2     # larger values converge faster to less accurate results
-TARGETED = False          # should we target one specific class? or just be wrong?
+ABORT_THRE = 2       # if we stop improving, abort gradient descent early
+#LEARNING_RATE = 1e-2     # larger values converge faster to less accurate results
+#TARGETED = False          # should we target one specific class? or just be wrong?
 CONFIDENCE = 0           # how strong the adversarial example should be
 INITIAL_CONST = 1e-3     # the initial constant c to pick as a first guess
+L2_THRE = 2.0
 
 class cwl2:
     def __init__(self, model, model_scope, dataset_type="tiny",
-                 confidence = CONFIDENCE, targeted = TARGETED, learning_rate = LEARNING_RATE,
-                 binary_search_steps = BINARY_SEARCH_STEPS, max_iterations = MAX_ITERATIONS,
-                 abort_early = ABORT_EARLY, 
+                 confidence = CONFIDENCE, targeted = False, learning_rate = 1e-2,
+                 binary_search_steps = BINARY_SEARCH_STEPS, max_iterations = 10000,
+                 abort_early = ABORT_EARLY, abort_threshold = ABORT_THRE, l2_threshold = L2_THRE,
                  initial_const = INITIAL_CONST,
                  boxmin = -0.5, boxmax = 0.5, scope=None):
         """
@@ -62,6 +64,8 @@ class cwl2:
         self.MAX_ITERATIONS = max_iterations
         self.BINARY_SEARCH_STEPS = binary_search_steps
         self.ABORT_EARLY = abort_early
+        self.ABORT_THRE = abort_threshold
+        self.L2_THRE = l2_threshold
         self.CONFIDENCE = confidence
         self.initial_const = initial_const
         self.batch_size = batch_size
@@ -165,7 +169,7 @@ class cwl2:
                 return x != y
 
         batch_size = self.batch_size
-
+        o_bestattack = np.copy(imgs)
         # convert to tanh-space
         imgs = np.arctanh((imgs - self.boxplus) / self.boxmul * 0.99999999)
 
@@ -177,7 +181,8 @@ class cwl2:
         # the best l2, score, and image attack
         o_bestl2 = [1e10]*batch_size
         o_bestscore = [-1]*batch_size
-        o_bestattack = [np.zeros(imgs[0].shape)]*batch_size
+        #o_bestattack = [np.zeros(imgs[0].shape)]*batch_size
+        
         
         for outer_step in range(self.BINARY_SEARCH_STEPS):
             print(o_bestl2)
@@ -204,7 +209,8 @@ class cwl2:
             
             #import pdb; pdb.set_trace()
             res = sess.run(self.output)
-            prev = 1e6
+            prev_loss = 1e6
+            thre_count = 0
             for iteration in range(self.MAX_ITERATIONS):
                 # perform the attack 
                 _, l, l2s, scores, nimg = sess.run([self.train, self.loss, 
@@ -222,9 +228,14 @@ class cwl2:
 
                 # check if we should abort search if we're getting nowhere.
                 if self.ABORT_EARLY and iteration%(self.MAX_ITERATIONS//10) == 0:
-                    if l > prev*.9999:
+                    if l > prev_loss*.9999:
+                        thre_count += 1
+                    else:
+                        thre_count = 0
+                        prev_loss = l
+                    if thre_count >= self.ABORT_THRE or l2s > self.L2_THRE:
                         break
-                    prev = l
+                    
 
                 # adjust the best result found so far
                 for e,(l2,sc,ii) in enumerate(zip(l2s,scores,nimg)):

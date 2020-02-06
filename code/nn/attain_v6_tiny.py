@@ -4,21 +4,21 @@ import nn.scae as scae
 import nn.vcae as vcae
 import nn.vcae_new as vcae_new
 import nn.cavcae as cavcae
-import nn.mnist_classifier as mnist_cnn
+import nn.resnet as resnet
 import nn.ae.attresenc_v3 as attresenc
-import nn.ae.attresdec_v3 as attresdec
+import nn.ae.attresdec_v4 as attresdec
 import nn.embedder as embedder
 from utils.decorator import *
 from dependency import *
-import math
+import os, math
 
 
 class ATTAIN:
     """
-    Attentive Adversarial Imitation Network
+    Attentive Adversarial Imitation Network, targeted/untargeted
     """
 
-    def __init__(self, data, label, low_bound, up_bound, attack_epsilon, is_training, data_fake=None):
+    def __init__(self, data, label, low_bound, up_bound, attack_epsilon, is_training, data_fake=None, targeted_label=None):
         self.data = data
         self.label = label
         self.output_low_bound = low_bound
@@ -27,6 +27,7 @@ class ATTAIN:
         self.central_channel_size = FLAGS.CENTRAL_CHANNEL_SIZE
         self.attack_epsilon = attack_epsilon
         self.is_training = is_training
+        self.targeted_label = targeted_label
 
         # Class label autoencoder
         with tf.variable_scope(FLAGS.LBL_NAME) as lbl_scope:
@@ -54,8 +55,8 @@ class ATTAIN:
             if FLAGS.USE_LABEL_MASK:
                 with tf.variable_scope("mask"):
                     ## mask
-                    row = 32
-                    col = 32
+                    row = 64
+                    col = 64
                     img_shape = [row, col]
                     size = np.prod(img_shape)
                     w1_shape = [label.get_shape().as_list()[-1], size]
@@ -75,8 +76,8 @@ class ATTAIN:
             
             if FLAGS.ADD_RANDOM:
                 with tf.variable_scope("random"):
-                    row = 7
-                    col = 7
+                    row = 8
+                    col = 8
                     cha = 1024
                     img_shape = [row, col, cha]
                     size = np.prod(img_shape)
@@ -95,7 +96,6 @@ class ATTAIN:
             else:
                 self._random_states = None
 
-
         with tf.variable_scope('autoencoder'):
             if FLAGS.AE_TYPE == "ATTAE":
                 # Encoder
@@ -103,14 +103,14 @@ class ATTAIN:
                     self._encoder = attresenc.ATTRESENC(
                         attention_type=FLAGS.ATT_TYPE,
                         att_pos_idx=1,
-                        att_f_channel_size = 32,
-                        att_g_channel_size = 32,
-                        att_h_channel_size = 32,
-                        conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3]],
-                        conv_strides = [[2,2], [1,1], [2,2], [1,1]], 
-                        conv_channel_sizes=[32, 128, 256, 1024], 
-                        conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2],
-                        conv_drop_rate=[0.0, 0.8, 0.2, 0.0],
+                        att_f_channel_size = 64,
+                        att_g_channel_size = 64,
+                        att_h_channel_size = 64,
+                        conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
+                        conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
+                        conv_channel_sizes=[64, 128, 256, 512, 1024], 
+                        conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2, 0.2],
+                        conv_drop_rate=[0.0, 0.8, 0.2, 0.6, 0.0], #1.[0.0, 0.8, 0.2, 0.6, 0.0], 2.[0.0, 0.8, 0.2, 0.6, 0.0]
                         num_res_block=FLAGS.NUM_ENC_RES_BLOCK,
                         res_block_size=FLAGS.ENC_RES_BLOCK_SIZE,
                         res_filter_sizes=[1,1],
@@ -131,14 +131,14 @@ class ATTAIN:
                         self.output_low_bound, self.output_up_bound,
                         attention_type=FLAGS.ATT_TYPE,
                         att_pos_idx=-2,
-                        att_f_channel_size = 32,
-                        att_g_channel_size = 32,
-                        att_h_channel_size = 32,
-                        decv_filter_sizes=[[3,3], [4,4], [3,3], [4,4]],
-                        decv_strides = [[1,1], [2,2], [1,1], [2,2]], 
-                        decv_channel_sizes=[1024, 256, 128, 32], 
-                        decv_leaky_ratio=[0.2, 0.2, 0.2, 0.2],
-                        decv_drop_rate=[0.0, 0.2, 0.8, 0.0],
+                        att_f_channel_size = 64,
+                        att_g_channel_size = 64,
+                        att_h_channel_size = 64,
+                        decv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
+                        decv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
+                        decv_channel_sizes=[1024, 512, 256, 128, 64], 
+                        decv_leaky_ratio=[0.2, 0.2, 0.2, 0.2, 0.2],
+                        decv_drop_rate=[0.0, 0.6, 0.2, 0.8, 0.0], #1.[0.0, 0.6, 0.2, 0.8, 0.0], 2.[0.0, 0.6, 0.2, 0.8, 0.0]
                         num_res_block=FLAGS.NUM_DEC_RES_BLOCK,
                         res_block_size=FLAGS.DEC_RES_BLOCK_SIZE,
                         res_filter_sizes=[1,1],
@@ -160,31 +160,24 @@ class ATTAIN:
         
         # Adv data generated by AE
         with tf.variable_scope('target') as scope:
-            self._target_adv = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
-                         conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
-                         conv_channel_sizes=[16, 16, 32, 32, 64], 
-                         conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2, 0.2],
-                         conv_drop_rate=[0.0, 0.4, 0.1, 0.2, 0.0],
-                         num_res_block=1,
-                         res_block_size=1,
-                         res_filter_sizes=[1,1],
-                         res_leaky_ratio=0.2,
-                         res_drop_rate=0.2,
-                         out_state=4*4*64,
-                         out_fc_states=[1024, 256, 10],
-                         out_leaky_ratio=0.2,
-                         out_norm="NONE",
-                         use_norm="NONE",
-                         img_channel=1)
+            self._target_adv = resnet.resnet18()
             self._target_adv_logits, self._target_adv_prediction = self._target_adv.prediction(self._autoencoder_prediction)
-            self._target_adv_accuracy = self._target_adv.accuracy(self._target_adv_prediction, self.label)
+            if FLAGS.IS_TARGETED_ATTACK or self.targeted_label != None: # targeted
+                self._target_adv_accuracy = self._target_adv.accuracy(self._target_adv_prediction, self.targeted_label)
+            else:
+                self._target_adv_accuracy = self._target_adv.accuracy(self._target_adv_prediction, self.label)
+                
         # Fake data generated by attacking algo
         self.target_scope = scope
         with tf.variable_scope(scope, reuse=True):
             self._target_attack = self._target_adv
             if data_fake == None:
-                self.data_fake = fgm(self._target_attack.prediction, data, label, eps=self.attack_epsilon, iters=FLAGS.FGM_ITERS,
-                                    targeted=False, clip_min=0., clip_max=1.)
+                if FLAGS.IS_TARGETED_ATTACK or self.targeted_label != None: # targeted
+                    self.data_fake = fgm(self._target_attack.prediction, data, self.targeted_label, eps=self.attack_epsilon, iters=FLAGS.FGM_ITERS,
+                                        clip_min=0., clip_max=1.)
+                else:
+                    self.data_fake = fgm(self._target_attack.prediction, data, label, eps=self.attack_epsilon, iters=FLAGS.FGM_ITERS,
+                                        targeted=False, clip_min=0., clip_max=1.)
             else:
                 self.data_fake = data_fake
         
@@ -192,7 +185,11 @@ class ATTAIN:
             self._target_fake = self._target_adv
             self._target_fake_logits, self._target_fake_prediction = self._target_fake.prediction(self.data_fake)
             self.label_fake = self.get_label(self._target_fake_prediction)
-            self._target_fake_accuracy = self._target_fake.accuracy(self._target_fake_prediction, label)
+            if FLAGS.IS_TARGETED_ATTACK or self.targeted_label != None: # targeted
+                self._target_fake_accuracy = self._target_fake.accuracy(self._target_fake_prediction, self.targeted_label)
+            else:
+                self._target_fake_accuracy = self._target_fake.accuracy(self._target_fake_prediction, label)
+                
         # Clean data
         with tf.variable_scope(scope, reuse=True):
             self._target = self._target_adv
@@ -291,26 +288,22 @@ class ATTAIN:
     
 
     @lazy_method
-    def loss_y(self, beta_t, beta_f, beta_c):
+    def loss_y(self, beta_t, beta_f, beta_f2, beta_c):
         def loss_y_from_trans(): 
-            if FLAGS.LOSS_MODE_TRANS == "C_W": # Make the logits at the largest prob position of fake data larger than that at true position
+            if FLAGS.IS_TARGETED_ATTACK or self.targeted_label != None: # targeted
+                y_faked = tf.argmax(self.targeted_label, axis=1, output_type=tf.int32)
+            else:
                 y_faked = tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32)
-                mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
-                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+            mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+            y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
+            mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+            adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
+            adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+            if FLAGS.LOSS_MODE_TRANS == "C_W": # Make the logits at the largest prob position of fake data larger than that at true position
                 Ly_dist = tf.reduce_mean(
                     tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_at_y_faked), FLAGS.LOSS_Y_LOW_BOUND_T)
                 )
             elif FLAGS.LOSS_MODE_TRANS == "C_W2": # Make the logits at the largest prob position of fake data larger than that at true position
-                y_faked = tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32)
-                mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
-                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
-
                 loss_1 = tf.reduce_mean(tf.maximum(
                     tf.minimum(tf.subtract(adv_logits_at_y_clean, adv_logits_at_y_faked), 0.0),
                     FLAGS.LOSS_Y_LOW_BOUND_T)
@@ -324,13 +317,6 @@ class ATTAIN:
                 )
                 Ly_dist = loss_1 + loss_2
             elif FLAGS.LOSS_MODE_TRANS == "C_W3": # Make the logits at the largest prob position of fake data larger than that at true position
-                y_faked = tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32)
-                mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
-                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
-
                 loss_1 = tf.reduce_mean(tf.maximum(
                     tf.minimum(tf.subtract(adv_logits_at_y_clean, adv_logits_at_y_faked), 0.0),
                     FLAGS.LOSS_Y_LOW_BOUND_T)
@@ -348,65 +334,106 @@ class ATTAIN:
 
 
         def loss_y_from_fake(): 
-            if FLAGS.LOSS_MODE_FAKE == "LOGITS": # Minimize the distance of logits from faked data
-                Ly_dist = tf.reduce_mean(
-                    # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_logits-self._target_fake_logits), 1))
-                    tf.norm(self._target_adv_logits-self._target_fake_logits, ord=2, axis=1)
-                )
-            elif FLAGS.LOSS_MODE_FAKE == "PREDS": # Minimize the distance of prediction from faked data
-                Ly_dist = tf.reduce_mean(
-                    # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_prediction-self._target_fake_prediction), 1))
-                    tf.norm(self._target_adv_prediction-self._target_fake_prediction, ord=2, axis=1)
-                )
-            elif FLAGS.LOSS_MODE_FAKE == "ENTRO": # Minimize the distance of prediction from faked data
-                Ly_dist = tf.reduce_mean(
-                    tf.nn.softmax_cross_entropy_with_logits_v2(labels = self.label_fake, logits = self._target_adv_logits)
-                    # -tf.reduce_sum(self.label_fake * tf.log(self._target_adv_prediction), 1)
-                )
-            elif FLAGS.LOSS_MODE_FAKE == "C_W": # Maximize the logits at max prob position of faked data
+            loss_logits =tf.constant(0.0)
+            if FLAGS.IS_TARGETED_ATTACK or self.targeted_label != None: # targeted
+                y_faked = tf.argmax(self.targeted_label, axis=1, output_type=tf.int32)
+            else:
                 y_faked = tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32)
-                mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                mask2 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
-                adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_max_exclude_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+            mask1 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+            mask2 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
+            adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
+            adv_logits_max_exclude_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+            if FLAGS.LOSS_MODE_FAKE == "C_W": # Maximize the logits at max prob position of faked data
                 Ly_dist = tf.reduce_mean(
                     tf.maximum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), FLAGS.LOSS_Y_LOW_BOUND_F)
                 )
-            return beta_f * Ly_dist, Ly_dist
+            elif FLAGS.LOSS_MODE_FAKE == "C_W2": # Maximize the logits at max prob position of faked data
+                loss_1 = tf.reduce_mean(tf.maximum(
+                    tf.minimum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), 0.0),
+                    FLAGS.LOSS_Y_LOW_BOUND_T)
+                )
+                loss_2 = tf.reduce_mean(tf.minimum(FLAGS.LOSS_Y_UP_BOUND_T,
+                        np.exp(1.0) * (
+                            tf.exp(
+                                tf.maximum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), 0.0)
+                            ) - 1.0)
+                    )
+                )
+                Ly_dist = loss_1 + loss_2
+            elif FLAGS.LOSS_MODE_FAKE == "MIX":
+                loss_1 = tf.reduce_mean(tf.maximum(
+                    tf.minimum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), 0.0),
+                    FLAGS.LOSS_Y_LOW_BOUND_T)
+                )
+                loss_2 = tf.reduce_mean(tf.minimum(FLAGS.LOSS_Y_UP_BOUND_T,
+                        np.exp(1.0) * (
+                            tf.exp(
+                                tf.maximum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), 0.0)
+                            ) - 1.0)
+                    )
+                )
+                Ly_dist = loss_1 + loss_2
+
+                
+                '''
+                if self.targeted_label is not None: # targeted
+                #if self.targeted_label is  None:
+                    cond = tf.expand_dims(
+                        tf.cast(tf.equal(
+                            tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32),
+                            tf.argmax(self.targeted_label, axis=1, output_type=tf.int32)
+                        ), tf.float32),
+                        axis=1)
+                else: # untargeted
+                    cond = tf.expand_dims(
+                        tf.cast(tf.not_equal(
+                            tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32),
+                            tf.argmax(self.label, axis=1, output_type=tf.int32)
+                        ), tf.float32),
+                        axis=1)
+                loss_logits = tf.reduce_mean(
+                    tf.multiply(cond, 
+                        tf.sqrt(
+                            tf.reduce_sum(tf.square(
+                                self._target_adv_logits-self._target_fake_logits
+                                ), 1)
+                        )
+                    )
+                )
+                '''
+                # no matter targeted or untargeted, we don't want predicted label to be equal to label
+                cond = tf.expand_dims(
+                    tf.cast(tf.not_equal(
+                        tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32),
+                        tf.argmax(self.label, axis=1, output_type=tf.int32)
+                    ), tf.float32),
+                    axis=1)
+                loss_logits = tf.reduce_mean(
+                    tf.multiply(cond, 
+                        tf.sqrt(
+                            tf.reduce_sum(tf.square(
+                                self._target_adv_logits-self._target_fake_logits
+                                ), 1)
+                        )
+                    )
+                )
+                
+                
+
+            return beta_f * Ly_dist + beta_f2 * loss_logits, Ly_dist
         
         def loss_y_from_clean(): 
-            if FLAGS.LOSS_MODE_CLEAN == "LOGITS": # Maximize the distance of logits from clean data
-                Ly_dist = -1.0 * tf.reduce_mean(
-                    # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_logits-self._target_logits), 1))
-                    tf.norm(self._target_adv_logits-self._target_logits, ord=2, axis=1)
-                )
-            elif FLAGS.LOSS_MODE_CLEAN == "PREDS": # Maximize the distance of prediction from clean data
-                Ly_dist = -1.0 * tf.reduce_mean(
-                    # tf.sqrt(tf.reduce_sum(tf.square(self._target_adv_prediction-self._target_prediction), 1))
-                    tf.norm(self._target_adv_prediction-self._target_prediction, ord=2, axis=1)
-                )
-            elif FLAGS.LOSS_MODE_CLEAN == "ENTRO": # Maximize the distance of prediction from clean data
-                Ly_dist = -1.0 * tf.reduce_mean(
-                    tf.nn.softmax_cross_entropy_with_logits_v2(labels = self.label, logits = self._target_adv_logits)
-                    # -tf.reduce_sum(self.label_fake * tf.log(self._target_adv_prediction), 1)
-                )
-            
-            elif FLAGS.LOSS_MODE_CLEAN == "C_W": # Minimize the logits at clean label
-                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
-                mask1 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
-                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_max_exclude_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+            y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
+            mask1 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
+            mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
+            adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
+            adv_logits_max_exclude_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+            if FLAGS.LOSS_MODE_CLEAN == "C_W": # Minimize the logits at clean label
                 Ly_dist = tf.reduce_mean(
                     tf.maximum(tf.subtract(adv_logits_at_y_clean, adv_logits_max_exclude_y_clean), FLAGS.LOSS_Y_LOW_BOUND_C)
                 )
             
             elif FLAGS.LOSS_MODE_CLEAN == "C_W2": # Minimize the logits at clean label
-                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
-                mask1 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
-                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_max_exclude_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
                 # part 1
                 loss_1 = tf.reduce_mean(tf.maximum(
                     tf.minimum(tf.subtract(adv_logits_at_y_clean, adv_logits_max_exclude_y_clean), 0.0),
@@ -424,11 +451,6 @@ class ATTAIN:
                 Ly_dist = loss_1 + loss_2
             
             elif FLAGS.LOSS_MODE_CLEAN == "C_W3": # Minimize the logits at clean label
-                y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
-                mask1 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
-                mask2 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
-                adv_logits_at_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
-                adv_logits_max_exclude_y_clean = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
                 # part 1
                 loss_1 = tf.reduce_mean(tf.maximum(
                     tf.minimum(tf.subtract(adv_logits_at_y_clean, adv_logits_max_exclude_y_clean), 0.0),
@@ -701,11 +723,17 @@ class ATTAIN:
     def tf_load(self, sess, scope='autoencoder', name='deep_cae.ckpt'):
         #saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
         saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope))
-        saver.restore(sess, FLAGS.AE_PATH+'/'+scope+'/'+name)
-        print("Restore model from {}".format(FLAGS.AE_PATH+'/'+scope+'/'+name))
+        path = FLAGS.AE_PATH+'/'+scope
+        if not os.path.exists(path):
+            print("Wrong path: {}".format(path))
+        saver.restore(sess, path +'/'+name)
+        print("Restore model from {}".format(path +'/'+name))
 
     def tf_save(self, sess, scope='autoencoder', name='deep_cae.ckpt'):
         #saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
         saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope))
-        saver.save(sess, FLAGS.AE_PATH+'/'+scope+'/'+name)
-        print("Save model to {}".format(FLAGS.AE_PATH+'/'+scope+'/'+name))
+        path = FLAGS.AE_PATH+'/'+scope
+        if not os.path.exists(path):
+            os.mkdir(path)
+        saver.save(sess, path +'/'+name)
+        print("Save model to {}".format(path +'/'+name))

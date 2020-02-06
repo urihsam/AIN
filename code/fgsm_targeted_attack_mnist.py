@@ -23,6 +23,7 @@ model_utils.set_flags()
 # In[3]:
 clean_train_saved = True
 clean_test_saved = True
+targeted_class_id = 8 # 0-9
 data = dataset(FLAGS.DATA_DIR, split_ratio=1.0, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
 
 valid_frequency = 1
@@ -35,7 +36,8 @@ g = tf.get_default_graph()
 # attack_target = 8
 with g.as_default():
     images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
-    label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
+    clean_label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
+    targeted_label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
     with tf.variable_scope('target') as scope:
         t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
                             conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
@@ -54,7 +56,7 @@ with g.as_default():
                             use_norm="NONE",
                             img_channel=1)
         _, clean_pred = t_model.prediction(images_holder)
-        clean_acc = t_model.accuracy(clean_pred, label_holder)
+        clean_acc = t_model.accuracy(clean_pred, clean_label_holder)
     with tf.variable_scope(scope, reuse=True):
         t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
                             conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
@@ -72,8 +74,8 @@ with g.as_default():
                             out_norm="NONE",
                             use_norm="NONE",
                             img_channel=1)
-        data_fake = fgm(t_model.prediction, images_holder, label_holder, 
-                        eps=FLAGS.EPSILON, iters=FLAGS.FGM_ITERS, targeted=False, clip_min=0., clip_max=1.)
+        data_fake = fgm(t_model.prediction, images_holder, targeted_label_holder, 
+                        eps=FLAGS.EPSILON, iters=FLAGS.FGM_ITERS, clip_min=0., clip_max=1.)
     with tf.variable_scope(scope, reuse=True):
         t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
                             conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
@@ -92,7 +94,7 @@ with g.as_default():
                             use_norm="NONE",
                             img_channel=1)
         _, fake_pred = t_model.prediction(data_fake)
-        fake_acc = t_model.accuracy(fake_pred, label_holder)
+        fake_acc = t_model.accuracy(fake_pred, targeted_label_holder)
 
 
 with tf.Session(graph=g) as sess:
@@ -180,7 +182,7 @@ with tf.Session(graph=g) as sess:
         for class_id in range(FLAGS.NUM_CLASSES):
             img_path = train_path + "/{}".format(class_id)
             clean_path = img_path + "/images"
-            atk_path = clean_path + "/fgsm"
+            atk_path = clean_path + "/fgsm_t{}".format(targeted_class_id)
             if not os.path.exists(atk_path):
                 os.mkdir(atk_path)
             
@@ -199,11 +201,13 @@ with tf.Session(graph=g) as sess:
                     assert clean_img.shape == (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS)
                     clean_img = np.expand_dims(clean_img / 255.0, axis=0)
                     clean_label = np.expand_dims(model_utils._one_hot_encode(int(class_id), FLAGS.NUM_CLASSES), axis=0)
+                    targeted_label = np.expand_dims(model_utils._one_hot_encode(int(targeted_class_id), FLAGS.NUM_CLASSES), axis=0)
 
 
                     feed_dict = {
                         images_holder: clean_img, 
-                        label_holder: clean_label
+                        clean_label_holder: clean_label,
+                        targeted_label_holder: targeted_label
                     }                
                     #import pdb; pdb.set_trace()
                     start = time.time()
@@ -254,7 +258,7 @@ with tf.Session(graph=g) as sess:
         for class_id in range(FLAGS.NUM_CLASSES):
             img_path = train_path + "/{}".format(class_id)
             clean_path = img_path + "/images"
-            atk_path = clean_path + "/fgsm"
+            atk_path = clean_path + "/fgsm_t{}".format(targeted_class_id)
             if not os.path.exists(atk_path):
                 os.mkdir(atk_path)
             
@@ -272,11 +276,14 @@ with tf.Session(graph=g) as sess:
                     assert clean_img.shape == (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS)
                     clean_img = np.expand_dims(clean_img / 255.0, axis=0)
                     clean_label = np.expand_dims(model_utils._one_hot_encode(int(class_id), FLAGS.NUM_CLASSES), axis=0)
+                    targeted_label = np.expand_dims(model_utils._one_hot_encode(int(targeted_class_id), FLAGS.NUM_CLASSES), axis=0)
+
 
                 
                     feed_dict = {
                         images_holder: clean_img, 
-                        label_holder: clean_label
+                        clean_label_holder: clean_label,
+                        targeted_label_holder: targeted_label
                     }                
                     #import pdb; pdb.set_trace()
                     start = time.time()
@@ -336,11 +343,14 @@ with tf.Session(graph=g) as sess:
     batch_xs = np.load("test_plot_clean_img.npy")
     batch_ys = np.load("test_plot_clean_y.npy")
 
+    targeted_label = np.asarray(model_utils._one_hot_encode(
+                        [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES))
 
     #import pdb; pdb.set_trace()
     feed_dict = {
         images_holder: batch_xs, 
-        label_holder: batch_ys
+        clean_label_holder: batch_ys,
+        targeted_label_holder: targeted_label
     }
     # c&w attack
     adv_images = sess.run(fetches=data_fake, feed_dict=feed_dict)
@@ -358,6 +368,6 @@ with tf.Session(graph=g) as sess:
         x_offset += im1.size[0]
 
     new_im.show()
-    new_im.save('iFGSM_MNIST_UNTGT_results.jpg')
+    new_im.save('iFGSM_MNIST_TGT_results.jpg')
 
 

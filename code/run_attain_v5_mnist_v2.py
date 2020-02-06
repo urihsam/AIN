@@ -1,19 +1,15 @@
-'''
-Adaptively change pixel bounds
-'''
-import nn.attain_v5 as attain
+import nn.attain_v5_mnist as attain
 import os, math
-from tensorflow.examples.tutorials.mnist import input_data
 from PIL import Image
 from dependency import *
-from utils import model_utils
-from utils.cw_l2_attack import cwl2
-from utils.data_utils import dataset
+import utils.model_utils_mnist as  model_utils
+#from utils.data_utils_mnist_raw import dataset
+from utils.data_utils_mnist import dataset
 
 
 model_utils.set_flags()
 
-data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
+data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED, adv_path_prefix=FLAGS.ADV_PATH_PREFIX)
 
 
 def main(arvg=None):
@@ -37,7 +33,7 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             model_loss, model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg, 
             model_loss_x, model_lx_true, model_lx_fake, 
             model_lx_dist_true, model_lx_dist_fake, model_lx_dist_trans,
-            model_max_dist_true, model_max_dist_fake, model_max_dist_trans, 
+            model_max_dist_true, model_max_dist_fake, model_max_dist_trans,
             model_loss_y, model_ly_trans, model_ly_fake, model_ly_clean, 
             model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean,
             graph_dict["merged_summary"]]
@@ -78,8 +74,8 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
         }
         
         batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_recon_loss, batch_label_loss, batch_sparse_loss, batch_var_loss, batch_reg, \
-            batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, batch_Lx_dist_trans,\
-            batch_max_dist_true, batch_max_dist_fake, batch_max_dist_trans,\
+            batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, batch_Lx_dist_trans, \
+            batch_max_dist_true, batch_max_dist_fake, batch_max_dist_trans, \
             batch_l_y, batch_Ly_trans, batch_Ly_fake, batch_Ly_clean,\
             batch_Ly_dist_trans, batch_Ly_dist_fake, batch_Ly_dist_clean, \
             summary = sess.run(fetches=fetches, feed_dict=feed_dict)
@@ -136,7 +132,6 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
     Ly_dist_fake /= total_batch
     Ly_dist_clean /= total_batch
 
-    #adv_images = X+adv_noises
     print('Original accuracy: {0:0.5f}'.format(acc))
     print('Faked accuracy: {0:0.5f}'.format(fake_acc))
     print('Attacked accuracy: {0:0.5f}'.format(adv_acc))
@@ -215,14 +210,10 @@ def test():
         beta_y_t_holder = tf.placeholder(tf.float32, ())
         beta_y_f_holder = tf.placeholder(tf.float32, ())
         beta_y_c_holder = tf.placeholder(tf.float32, ())
-        #kappa_t_holder = tf.placeholder(tf.float32, ())
-        #kappa_f_holder = tf.placeholder(tf.float32, ())
-        #kappa_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
-                              epsilon_holder, is_training)
+        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, epsilon_holder, is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -245,7 +236,7 @@ def test():
     with tf.Session(graph=g) as sess:
         sess.run(tf.global_variables_initializer())
         # Load target classifier
-        model._target.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
+        model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
         model.tf_load(sess)
         model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         # tensorboard writer
@@ -258,28 +249,21 @@ def test():
         test_info(sess, model, test_writer, graph_dict, "test_log.txt", total_batch=total_test_batch)
         test_writer.close() 
         
-        '''
-        batch_xs, batch_ys, batch_path = data.next_test_batch(FLAGS.BATCH_SIZE, True)
-        np.save("test_plot_clean_tiny_img.npy", batch_xs[0:10])
-        np.save("test_plot_clean_tiny_y.npy", batch_ys[0:10])
-        np.save("test_plot_clean_tiny_path.npy", batch_path[0:10])
-        '''
-        #import pdb; pdb.set_trace()
-        batch_xs = np.load("test_plot_clean_tiny_img.npy")
-        batch_ys = np.load("test_plot_clean_tiny_y.npy")
+        batch_xs, batch_ys, batch_atks = data.next_test_batch(FLAGS.BATCH_SIZE, False)
         feed_dict = {
             images_holder: batch_xs,
             label_holder: batch_ys,
+            atk_holder: batch_atks,
             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
             is_training: False
         }
         adv_images = sess.run(model.prediction, feed_dict=feed_dict)
-        width = 10*64
-        height = 2*64
+        width = 10*32
+        height = 2*32
         new_im = Image.new('RGB', (width, height))
         x_offset = 0
-        y_offset = 64
+        y_offset = 32
         for i in range(10):
             im1 = Image.fromarray(np.uint8(batch_xs[i]*255.0))
             im2 = Image.fromarray(np.uint8(adv_images[i]*255.0))
@@ -288,7 +272,7 @@ def test():
             x_offset += im1.size[0]
 
         new_im.show()
-        new_im.save('AttAIN_TINY_UNTGT_results.jpg')
+        new_im.save('AIN_results.jpg')
 
 
 def train():
@@ -320,7 +304,6 @@ def train():
         beta_y_c_holder = tf.placeholder(tf.float32, ())
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
-        
         # model
         model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
                               epsilon_holder, is_training, atk_holder)
@@ -357,13 +340,13 @@ def train():
         graph_dict["merged_summary"] = merged_summary
 
     with tf.Session(graph=g) as sess:
-        #import pdb; pdb.set_trace()
         sess.run(tf.global_variables_initializer())
         # Load target classifier
-        model._target.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
+        model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
         if FLAGS.load_AE:
             print("Autoencoder loaded.")
             model.tf_load(sess)
+            #model.tf_load(sess, name='deep_cae_last.ckpt')
             model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         # For tensorboard
         train_writer = model_utils.init_writer(FLAGS.TRAIN_LOG_PATH, g)
@@ -379,7 +362,7 @@ def train():
             total_pre_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
             total_valid_batch = None
             total_pre_valid_batch = int(data.valid_size/FLAGS.BATCH_SIZE)
-
+        
 
         if FLAGS.train_label:
             print("Pre-training...")
@@ -474,6 +457,9 @@ def train():
                         beta_y_t_holder: FLAGS.BETA_Y_TRANS,
                         beta_y_f_holder: FLAGS.BETA_Y_FAKE,
                         beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
+                        #kappa_t_holder: FLAGS.KAPPA_FOR_TRANS,
+                        #kappa_f_holder: FLAGS.KAPPA_FOR_FAKE,
+                        #kappa_c_holder: FLAGS.KAPPA_FOR_CLEAN,
                         is_training: True,
                         partial_loss_holder: FLAGS.PARTIAL_LOSS
                     }
@@ -519,8 +505,7 @@ def train():
                     print("Loss x = {:.4f}  Loss y = {:.4f}".format(l_x, l_y))
                     print("Loss x for true = {:.4f} Loss x for fake = {:.4}".format(Lx_true, Lx_fake))
                     print("Loss y for trans = {:.4f} Loss y for fake = {:.4f} Loss y for clean = {:.4f}".format(Ly_trans, Ly_fake, Ly_clean))
-                    print("Lx distance for true = {:.4f} Lx distance for fake = {:.4f} Lx distance for trans = {:.4f}".format(
-                        Lx_dist_true, Lx_dist_fake, Lx_dist_trans))
+                    print("Lx distance for true = {:.4f} Lx distance for fake = {:.4f} Lx distance for trans = {:.4f}".format(Lx_dist_true, Lx_dist_fake, Lx_dist_trans))
                     print("Max pixel distance for true = {:.4f} Max pixel distance for fake = {:.4f} Max pixel distance for trans = {:.4f}".format(
                         max_dist_true, max_dist_fake, max_dist_trans))
                     print("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f}".format(
@@ -543,7 +528,6 @@ def train():
             print("Validation")
             valid_dict = test_info(sess, model, valid_writer, graph_dict, "valid_log.txt", total_batch=total_valid_batch, valid=True)
             
-
             #if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1: # stop
             if valid_dict["max_dist_true"] <= valid_dict["max_dist_trans"]: # stop
                 break
@@ -553,14 +537,17 @@ def train():
                     model.tf_save(sess)
                     min_valid_acc = valid_dict["adv_acc"]
                     print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
+                else:
+                    print()
+                    continue
             
             print("******************************************************************")
             print()
             print()
 
-             
             # Update Pixel bound
-            if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
+            if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and valid_dict["adv_acc"] <= min_valid_acc:
+            #if FLAGS.PIXEL_BOUND >= FLAGS.MIN_BOUND and FLAGS.PIXEL_BOUND <= FLAGS.MAX_BOUND and (epoch+1) % FLAGS.BOUND_CHANGE_EPOCHS == 0:
                 curr_valid_acc = min_valid_acc # min valid acc for current bound
                 model.tf_load(sess) # corresponding model for min valid acc
                 valid_dict = test_info(sess, model, valid_writer, graph_dict, "valid_log.txt", total_batch=total_valid_batch, valid=True)
@@ -639,7 +626,6 @@ def train():
 
             
         print("Optimization Finished!")
-
 
 
         train_writer.close() 

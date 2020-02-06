@@ -24,7 +24,8 @@ class dataset(object):
     
     """
     def __init__(self, data_dir, image_dir="images", split_ratio=0.9, 
-                 onehot=True, normalize=True, biased=True):
+                 onehot=True, normalize=True, biased=True, 
+                 adv_path_prefix="fgsm"):
         print("Dataset here")
         self.data_dir = data_dir
         self.train_dir = self.path("train")
@@ -36,6 +37,7 @@ class dataset(object):
         self.onehot = onehot
         self.normalize = normalize
         self.biased = biased
+        self.adv_path_prefix = adv_path_prefix
         # Obtain two lists of tuples in format (image file path, image class name)
         self._train_image_names_classes, self._valid_image_names_classes = self._get_train_valid_img_names_and_classes()
         # Obtain a list of tuples in format (image file path, image class name)
@@ -96,7 +98,10 @@ class dataset(object):
         file_path, class_name = img_name_class
         path = os.path.join(file_path)
         if is_np: # np file
-            image = np.load(path)
+            try:
+                image = np.load(path)
+            except:
+                return None
         else:
             im = Image.open(path)
             image = np.asarray(im)
@@ -165,20 +170,22 @@ class dataset(object):
                 self.train_shuffle()
             img_name_class = self._train_image_names_classes[self._train_batch_idx]
             res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
+            #
+            path_name = img_name_class[0].split("/")
+            atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
             if res is not None:
-                images[idx, :, :, :] = res[0]
-                labels[idx, :] = res[1]
-                # atk
-                if not with_path:
-                    # atk
-                    path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
-                    atk_res = self._load_image([atk_path, img_name_class[1]], self.onehot, self.normalize, self.biased)
-                    atk_images[idx, :, :, :] = atk_res[0]
-                #
-                #
+                if os.path.exists(atk_path):
+                    images[idx, :, :, :] = res[0]
+                    labels[idx, :] = res[1]
+                    if not with_path:
+                        # atk
+                        atk_res = self._load_image([atk_path, img_name_class[1]], self.onehot, self.normalize, self.biased)
+                        atk_images[idx, :, :, :] = atk_res[0]
+                    #
+                    idx += 1
+                #  
                 paths.append(img_name_class[0])
-                idx += 1
+                
             self._train_batch_idx += 1
         if with_path:
             return images, labels, paths
@@ -200,20 +207,21 @@ class dataset(object):
                 self.valid_shuffle()
             img_name_class = self._valid_image_names_classes[self._valid_batch_idx]
             res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
+            #
+            path_name = img_name_class[0].split("/")
+            atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
             if res is not None:
-                images[idx, :, :, :] = res[0]
-                labels[idx, :] = res[1]
-                # atk
-                if not with_path:
-                    # atk
-                    path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
-                    atk_res = self._load_image([atk_path, img_name_class[1]], self.onehot, self.normalize, self.biased)
-                    atk_images[idx, :, :, :] = atk_res[0]
-                #
-                #
+                if os.path.exists(atk_path):
+                    images[idx, :, :, :] = res[0]
+                    labels[idx, :] = res[1]
+                    if not with_path:
+                        # atk
+                        atk_res = self._load_image([atk_path, img_name_class[1]], self.onehot, self.normalize, self.biased)
+                        atk_images[idx, :, :, :] = atk_res[0]
+                    #
+                    idx += 1
+                #  
                 paths.append(img_name_class[0])
-                idx += 1
             self._valid_batch_idx += 1
         if with_path:
             return np.array(images), np.array(labels), paths
@@ -235,18 +243,21 @@ class dataset(object):
                 self.test_shuffle()
             img_name_class = self._test_image_names_classes[self._test_batch_idx]
             res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
+            #
+            path_name = img_name_class[0].split("/")
+            atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
             if res is not None:
-                images[idx, :, :, :] = res[0]
-                labels[idx, :] = res[1]
-                if not with_path:
-                    # atk
-                    path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
-                    atk_res = self._load_image([atk_path, img_name_class[1]], self.onehot, self.normalize, self.biased)
-                    atk_images[idx, :, :, :] = atk_res[0]
-                #
+                if os.path.exists(atk_path):
+                    images[idx, :, :, :] = res[0]
+                    labels[idx, :] = res[1]
+                    if not with_path:
+                        # atk
+                        atk_res = self._load_image([atk_path, img_name_class[1]], self.onehot, self.normalize, self.biased)
+                        atk_images[idx, :, :, :] = atk_res[0]
+                    #
+                    idx += 1
+                #  
                 paths.append(img_name_class[0])
-                idx += 1
             self._test_batch_idx += 1
         if with_path:
             return np.array(images), np.array(labels), paths

@@ -1,6 +1,6 @@
 from dependency import *
 
-def fgm(model_prediction, x, y, eps=0.01, iters=1, sign=True, clip_min=0., clip_max=255.):
+def fgm(model_prediction, x, y, eps=0.01, iters=1, sign=True, targeted=True, clip_min=0., clip_max=255.):
     """
     Fast gradient method.
     See https://arxiv.org/abs/1412.6572 and https://arxiv.org/abs/1607.02533
@@ -32,8 +32,11 @@ def fgm(model_prediction, x, y, eps=0.01, iters=1, sign=True, clip_min=0., clip_
     def _body(xadv, i):
         logits, ybar = model_prediction(xadv, use_summary=False)
         loss = loss_fn(labels=y, logits=logits)
-        dy_dx, = tf.gradients(loss, xadv)
-        xadv = tf.stop_gradient(xadv + eps*noise_fn(dy_dx))
+        dy_dx, = tf.gradients(loss, xadv) # gradient
+        if targeted:
+            xadv = tf.stop_gradient(xadv - eps*noise_fn(dy_dx)) # gradient descent -- minimize, targeted label
+        else:
+            xadv = tf.stop_gradient(xadv + eps*noise_fn(dy_dx)) # gradient ascent -- maximize, true label
         xadv = tf.clip_by_value(xadv, clip_min, clip_max)
         return xadv, i+1
 

@@ -26,8 +26,8 @@ data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED, s
 valid_frequency = 1
 stop_threshold = 0.8
 stop_count = 5
+targeted_class_id = FLAGS.TARGETED_LABEL
 ignore = True
-
 
 # In[5]:
 
@@ -37,18 +37,19 @@ g = tf.get_default_graph()
 with g.as_default():
     images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
     label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
+    targeted_label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
     with tf.variable_scope('target') as scope:
         t_model = resnet.resnet18()
         _, clean_pred = t_model.prediction(images_holder)
         clean_acc = t_model.accuracy(clean_pred, label_holder)
     with tf.variable_scope(scope, reuse=True):
         t_model = resnet.resnet18()
-        data_fake = fgm(t_model.prediction, images_holder, label_holder, 
-                        eps=FLAGS.EPSILON, iters=FLAGS.FGM_ITERS, targeted=False, clip_min=0., clip_max=1.)
+        data_fake = fgm(t_model.prediction, images_holder, targeted_label_holder, 
+                        eps=FLAGS.EPSILON, iters=FLAGS.FGM_ITERS, clip_min=0., clip_max=1.)
     with tf.variable_scope(scope, reuse=True):
         t_model = resnet.resnet18()
         _, fake_pred = t_model.prediction(data_fake)
-        fake_acc = t_model.accuracy(fake_pred, label_holder)
+        fake_acc = t_model.accuracy(fake_pred, targeted_label_holder)
 
 
 
@@ -71,15 +72,18 @@ with tf.Session(graph=g) as sess:
                 batch_xs, batch_ys, path = data.next_train_batch(FLAGS.BATCH_SIZE, with_path=True)
                 #path name
                 path_name = path[0].split("/")
-                new_path = "/".join(path_name[:-1] +  ["fgsm"])
+                new_path = "/".join(path_name[:-1] +  ["fgsm_t{}".format(targeted_class_id)])
                 if not os.path.exists(new_path):
                     os.mkdir(new_path)
-                file_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                file_path = "/".join(path_name[:-1] + ["fgsm_t{}".format(targeted_class_id), path_name[-1]])
 
                 if not os.path.exists(file_path):
+                    targeted_label = np.asarray(model_utils._one_hot_encode(
+                                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
                     feed_dict = {
                         images_holder: batch_xs, 
-                        label_holder: batch_ys
+                        label_holder: batch_ys,
+                        targeted_label_holder: targeted_label
                     } 
                     start = time.time()
                     # c&w attack
@@ -91,7 +95,7 @@ with tf.Session(graph=g) as sess:
                     #im.save(file_path)
                     np.save(file_path, atk_data[0]*255.0)
                 else:
-                    print("fgsm adv images has existed")
+                    print("targeted fgsm adv images has existed")
             
 
                 if train_idx % 2500 == 2499:
@@ -112,15 +116,18 @@ with tf.Session(graph=g) as sess:
                 batch_xs, batch_ys, path = data.next_valid_batch(FLAGS.BATCH_SIZE, with_path=True)
                 # path name
                 path_name = path[0].split("/")
-                new_path = "/".join(path_name[:-1] +  ["fgsm"])
+                new_path = "/".join(path_name[:-1] +  ["fgsm_t{}".format(targeted_class_id)])
                 if not os.path.exists(new_path):
                     os.mkdir(new_path)
-                file_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                file_path = "/".join(path_name[:-1] + ["fgsm_t{}".format(targeted_class_id), path_name[-1]])
 
                 if not os.path.exists(file_path):
+                    targeted_label = np.asarray(model_utils._one_hot_encode(
+                                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
                     feed_dict = {
                         images_holder: batch_xs, 
-                        label_holder: batch_ys
+                        label_holder: batch_ys,
+                        targeted_label_holder: targeted_label
                     } 
                     start = time.time()
                     # c&w attack
@@ -133,7 +140,7 @@ with tf.Session(graph=g) as sess:
                     #im.save(file_path)
                     np.save(file_path, atk_data[0]*255.0)
                 else:
-                    print("fgsm adv images has existed")
+                    print("targeted fgsm adv images has existed")
             
 
                 if valid_idx % 2500 == 2499:
@@ -154,15 +161,18 @@ with tf.Session(graph=g) as sess:
                 batch_xs, batch_ys, path = data.next_test_batch(FLAGS.BATCH_SIZE, with_path=True)
                 # path name
                 path_name = path[0].split("/")
-                new_path = "/".join(path_name[:-1] +  ["fgsm"])
+                new_path = "/".join(path_name[:-1] +  ["fgsm_t{}".format(targeted_class_id)])
                 if not os.path.exists(new_path):
                     os.mkdir(new_path)
-                file_path = "/".join(path_name[:-1] + ["fgsm", path_name[-1]])
+                file_path = "/".join(path_name[:-1] + ["fgsm_t{}".format(targeted_class_id), path_name[-1]])
 
                 if not os.path.exists(file_path):
+                    targeted_label = np.asarray(model_utils._one_hot_encode(
+                                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
                     feed_dict = {
                         images_holder: batch_xs, 
-                        label_holder: batch_ys
+                        label_holder: batch_ys,
+                        targeted_label_holder: targeted_label
                     } 
                     start = time.time()
                     # c&w attack
@@ -175,7 +185,7 @@ with tf.Session(graph=g) as sess:
                     #im.save(file_path)
                     np.save(file_path, atk_data[0]*255.0)
                 else:
-                    print("fgsm adv images has existed")
+                    print("targeted fgsm adv images has existed")
             
 
                 if test_idx % 2500 == 2499:
@@ -192,17 +202,20 @@ with tf.Session(graph=g) as sess:
             print("Train cost: {}s per example".format(train_cost))
             print("Valid cost: {}s per example".format(valid_cost))
             print("Test cost: {}s per example".format(test_cost))
-            with open("fgsm_tiny_info.txt", "a+") as file: 
+            with open("tgt_fgsm_tiny_info.txt", "a+") as file: 
                 file.write("Train cost: {}s per example".format(train_cost))
                 file.write("Valid cost: {}s per example".format(valid_cost))
                 file.write("Test cost: {}s per example".format(test_cost))
 
-    ## distances
-    size = 500 
+    # distance
+    size = 500
     batch_xs, batch_ys, _ = data.next_valid_batch(size, with_path=True)
+    targeted_label = np.asarray(model_utils._one_hot_encode(
+                        [int(FLAGS.TARGETED_LABEL)]*size, FLAGS.NUM_CLASSES))
     feed_dict = {
         images_holder: batch_xs, 
-        label_holder: batch_ys
+        label_holder: batch_ys,
+        targeted_label_holder: targeted_label
     }
     # attack
     adv_images = sess.run(fetches=data_fake, feed_dict=feed_dict)
@@ -217,21 +230,26 @@ with tf.Session(graph=g) as sess:
             np.square(np.reshape(adv_images, (size, 64*64*3))-np.reshape(batch_xs, (size, 64*64*3))), 
             axis=-1)
         ))
+    
     print("L inf: {}".format(l_inf))
     print("L 2: {}".format(l_2))
-
-
+    
     # plot figure
     batch_xs = np.load("test_plot_clean_tiny_img.npy")
     batch_ys = np.load("test_plot_clean_tiny_y.npy")
 
+    targeted_label = np.asarray(model_utils._one_hot_encode(
+                        [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES))
+
     #import pdb; pdb.set_trace()
     feed_dict = {
         images_holder: batch_xs, 
-        label_holder: batch_ys
+        label_holder: batch_ys,
+        targeted_label_holder: targeted_label
     }
     # attack
     adv_images = sess.run(fetches=data_fake, feed_dict=feed_dict)
+
 
     width = 10*64
     height = 2*64
@@ -246,8 +264,11 @@ with tf.Session(graph=g) as sess:
         x_offset += im1.size[0]
 
     new_im.show()
-    new_im.save('iFGSM_TINY_UNTGT_results.jpg')
+    new_im.save('iFGSM_TINY_TGT_results.jpg')
 
+        
+            
+        
         
             
         

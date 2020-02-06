@@ -37,6 +37,7 @@ with g.as_default():
     images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
     label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
     fake_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
+    tgt_label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
     with tf.variable_scope('target') as scope:
         t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
                             conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
@@ -55,7 +56,7 @@ with g.as_default():
                             use_norm="NONE",
                             img_channel=1)
     cw = cwl2(t_model, model_scope=scope, dataset_type="mnist", learning_rate=1e-3, max_iterations=20000, 
-        confidence=0, targeted=False, boxmin = 0.0, boxmax = 1.0, 
+        confidence=0, targeted=True, boxmin = 0.0, boxmax = 1.0, 
         scope="CW_ATTACK")
     
     with tf.variable_scope(scope, reuse=True):
@@ -96,7 +97,7 @@ with g.as_default():
                             use_norm="NONE",
                             img_channel=1)
         _, fake_pred = t_model.prediction(fake_holder)
-        fake_acc = t_model.accuracy(fake_pred, label_holder)
+        fake_acc = t_model.accuracy(fake_pred, tgt_label_holder)
 
 
 
@@ -142,15 +143,18 @@ with tf.Session(graph=g) as sess:
     '''
     
     
-
+    size = 10
     batch_xs = np.load("test_plot_clean_img.npy")
     batch_ys = np.load("test_plot_clean_y.npy")
-    size = 10
+
+    tgt_ys = np.asarray(model_utils._one_hot_encode(
+        [int(FLAGS.TARGETED_LABEL)]*size, FLAGS.NUM_CLASSES))
+    
     #import pdb; pdb.set_trace()
     start = time.time()
     adv_images = []
     for idx in range(size):
-        adv_images.append(cw.attack(sess, np.expand_dims(batch_xs[idx], axis=0), np.expand_dims(batch_ys[idx], axis=0)))
+        adv_images.append(cw.attack(sess, np.expand_dims(batch_xs[idx], axis=0), np.expand_dims(tgt_ys[idx], axis=0)))
     time_cost = time.time() - start
     adv_images = np.concatenate(adv_images, 0)
 
@@ -176,7 +180,8 @@ with tf.Session(graph=g) as sess:
     feed_dict = {
         images_holder: batch_xs, 
         label_holder: batch_ys,
-        fake_holder: adv_images
+        fake_holder: adv_images,
+        tgt_label_holder: tgt_ys
     }
     clean_accuracy, fake_accuracy = sess.run(fetches=[clean_acc, fake_acc], feed_dict=feed_dict)
     print("Clean accuracy: {}".format(clean_accuracy))
@@ -195,10 +200,10 @@ with tf.Session(graph=g) as sess:
         x_offset += im1.size[0]
 
     new_im.show()
-    new_im.save('CW_MNIST_UNTGT_results.jpg')
+    new_im.save('CW_MNIST_TGT_results.jpg')
 
 
-    with open("CW_mnist_statistics.txt", "a+") as file: 
+    with open("CW_mnist_tgt_statistics.txt", "a+") as file: 
         file.write("Time cost of generating per adv example: {}\n".format(time_cost/size))
         file.write("L inf: {}\n".format(l_inf))
         file.write("L 2: {}\n".format(l_2))

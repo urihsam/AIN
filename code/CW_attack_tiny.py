@@ -9,147 +9,164 @@ import os
 
 # In[2]:
 import time
+import glob
 import os, math
 from tensorflow.examples.tutorials.mnist import input_data
 from PIL import Image
 from dependency import *
 import nn.resnet as resnet
-from utils import model_utils
+from utils import model_utils as model_utils
 from utils.cw_l2_attack import cwl2
 from utils.data_utils import dataset
 
 model_utils.set_flags()
 
 # In[3]:
-data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
+clean_saved = False
+data = dataset(FLAGS.DATA_DIR, split_ratio=1.0, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
 
 valid_frequency = 1
 stop_threshold = 0.8
 stop_count = 5
 
 
-# In[5]:
-
 ## tf.reset_default_graph()
 g = tf.get_default_graph()
 # attack_target = 8
 with g.as_default():
+    images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
+    label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
+    fake_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
+    #import pdb; pdb.set_trace()
+    
     with tf.variable_scope('target') as scope:
         t_model = resnet.resnet18()
-    cw = cwl2(t_model, model_scope=scope, max_iterations=1000, confidence=0, boxmin = 0.0, boxmax = 1.0, scope="CW_ATTACK")
+        _, clean_pred = t_model.prediction(images_holder)
+        clean_acc = t_model.accuracy(clean_pred, label_holder)
+
+    with tf.variable_scope(scope, reuse=True):
+        t_model = resnet.resnet18()
+    cw = cwl2(t_model, model_scope=scope, dataset_type="tiny", learning_rate=1e-3, max_iterations=20000, 
+        confidence=0, targeted=False, boxmin = 0.0, boxmax = 1.0, 
+        scope="CW_ATTACK")
+    
+    with tf.variable_scope(scope, reuse=True):
+        t_model = resnet.resnet18()
+        _, fake_pred = t_model.prediction(fake_holder)
+        fake_acc = t_model.accuracy(fake_pred, label_holder)
 
 
 
 with tf.Session(graph=g) as sess:
     #import pdb; pdb.set_trace()
     sess.run(tf.global_variables_initializer())
-    #model.tf_load(sess, "./models/target_classifier/resnet_v2_50/resnet_v2_50_2017", "target", name='resnet_v2_50.ckpt')
-    total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
-    total_valid_batch = int(data.valid_size/FLAGS.BATCH_SIZE)
-    total_test_batch = int(data.test_size/FLAGS.BATCH_SIZE)
+
+    '''
+    ## distances
+    size = 10 
+    batch_xs, batch_ys, _ = data.next_train_batch(size, with_path=True)
+
+    # attack
+    start = time.time()
+    adv_images = cw.attack(sess, batch_xs, batch_ys)
+    time_cost = time.time() - start
+
+    print("Time cost of generating per adv example: {}".format(time_cost/size))
+
+    l_inf = np.mean(
+        np.amax(
+            np.absolute(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
+            axis=-1)
+        )
     
-    # training, validation and test
-    for epoch in range(FLAGS.NUM_EPOCHS):
-        print("Epoch {}: ".format(epoch))
-        
-        time_cost = 0
-        time_count = 0
-        for train_idx in range(total_train_batch):
-            batch_xs, batch_ys, path = data.next_train_batch(FLAGS.BATCH_SIZE, with_path=True)
-            #path name
-            path_name = path[0].split("/")
-            new_path = "/".join(path_name[:-1] +  ["cw"])
-            if not os.path.exists(new_path):
-                os.mkdir(new_path)
-            file_path = "/".join(path_name[:-1] + ["cw", path_name[-1]])
+    l_2 = np.mean(
+        np.sqrt(np.sum(
+            np.square(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
+            axis=-1)
+        ))
+    print("L inf: {}".format(l_inf))
+    print("L 2: {}".format(l_2))
 
-            if not os.path.exists(file_path):
-                start = time.time()
-                # c&w attack
-                atk_data = cw.attack(sess, batch_xs, batch_ys)
-                time_cost += (time.time() - start)
-                time_count += 1
-                # save
-                im = Image.fromarray((atk_data[0]*255.0).astype(np.uint8))
-                im.save(file_path)
-            else:
-                print("CW adv images has existed")
-        
+    ## acc
+    feed_dict = {
+        images_holder: batch_xs, 
+        label_holder: batch_ys,
+        fake_holder: adv_images
+    }
+    clean_accuracy, fake_accuracy = sess.run(fetches=[clean_acc, fake_acc], feed_dict=feed_dict)
+    print("Clean accuracy: {}".format(clean_accuracy))
+    print("Fake accuracy: {}".format(fake_accuracy))
+    '''
+    
+    
 
-            if train_idx % 2500 == 2499:
-                print("{} adversarial examples have been generated".format(train_idx+1))
-        
-        train_cost = time_cost / time_count
-        printf("Training dataset done!\n")
+    batch_xs = np.load("test_plot_clean_tiny_img.npy")
+    batch_ys = np.load("test_plot_clean_tiny_y.npy")
+    size = 10
+    #import pdb; pdb.set_trace()
+    start = time.time()
+    adv_images = []
+    for idx in range(size):
+        adv_images.append(cw.attack(sess, np.expand_dims(batch_xs[idx], axis=0), np.expand_dims(batch_ys[idx], axis=0)))
+    time_cost = time.time() - start
+    adv_images = np.concatenate(adv_images, 0)
 
-        time_cost = 0
-        time_count = 0
-        for valid_idx in range(total_valid_batch):
-            batch_xs, batch_ys, path = data.next_valid_batch(FLAGS.BATCH_SIZE, with_path=True)
-            # path name
-            path_name = path[0].split("/")
-            new_path = "/".join(path_name[:-1] +  ["cw"])
-            if not os.path.exists(new_path):
-                os.mkdir(new_path)
-            file_path = "/".join(path_name[:-1] + ["cw", path_name[-1]])
+    
+    print("Time cost of generating per adv example: {}".format(time_cost/size))
 
-            if not os.path.exists(file_path):
-                # c&w attack
-                start = time.time()
-                atk_data = cw.attack(sess, batch_xs, batch_ys)
-                time_cost += (time.time() - start)
-                time_count += 1
-                
-                # save
-                im = Image.fromarray((atk_data[0]*255.0).astype(np.uint8))
-                im.save(file_path)
-            else:
-                print("CW adv images has existed")
-        
+    #import pdb; pdb.set_trace()
+    l_inf = np.mean(
+        np.amax(
+            np.absolute(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
+            axis=-1)
+        )
+    
+    l_2 = np.mean(
+        np.sqrt(np.sum(
+            np.square(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
+            axis=-1)
+        ))
+    print("L inf: {}".format(l_inf))
+    print("L 2: {}".format(l_2))
 
-            if valid_idx % 2500 == 2499:
-                print("{} adversarial examples have been generated".format(valid_idx+1))
-        
-        valid_cost = time_cost / time_count
-        printf("Validation dataset done!\n")
+    ## acc
+    feed_dict = {
+        images_holder: batch_xs, 
+        label_holder: batch_ys,
+        fake_holder: adv_images
+    }
+    clean_accuracy, fake_accuracy = sess.run(fetches=[clean_acc, fake_acc], feed_dict=feed_dict)
+    print("Clean accuracy: {}".format(clean_accuracy))
+    print("Fake accuracy: {}".format(fake_accuracy))
 
-        time_cost = 0
-        time_count = 0
-        for test_idx in range(total_test_batch):
-            batch_xs, batch_ys, path = data.next_test_batch(FLAGS.BATCH_SIZE, with_path=True)
-            # path name
-            path_name = path[0].split("/")
-            new_path = "/".join(path_name[:-1] +  ["cw"])
-            if not os.path.exists(new_path):
-                os.mkdir(new_path)
-            file_path = "/".join(path_name[:-1] + ["cw", path_name[-1]])
+    width = 10*28
+    height = 2*28
+    new_im = Image.new('L', (width, height))
+    x_offset = 0
+    y_offset = 28
+    for i in range(10):
+        im1 = Image.fromarray(np.reshape((batch_xs[i] * 255).astype(np.uint8), (28,28)))
+        im2 = Image.fromarray(np.reshape((adv_images[i]*255).astype(np.uint8), (28, 28)))
+        new_im.paste(im1, (x_offset, 0))
+        new_im.paste(im2, (x_offset, y_offset))
+        x_offset += im1.size[0]
 
-            if not os.path.exists(file_path):
-                # c&w attack
-                start = time.time()
-                atk_data = cw.attack(sess, batch_xs, batch_ys)
-                time_cost += (time.time() - start)
-                time_count += 1
+    new_im.show()
+    new_im.save('CW_TINY_UNTGT_results.jpg')
 
-                # save
-                im = Image.fromarray((atk_data[0]*255.0).astype(np.uint8))
-                im.save(file_path)
-            else:
-                print("CW adv images has existed")
-        
 
-            if test_idx % 2500 == 2499:
-                print("{} adversarial examples have been generated".format(test_idx+1))
-        
-        test_cost = time_cost / time_count
-        printf("Test dataset done!\n")
-        printf("Train cost: {}s per example".format(train_cost))
-        printf("Valid cost: {}s per example".format(valid_cost))
-        printf("Test cost: {}s per example".format(test_cost))
-        with open("cw_info.txt", "a+") as file: 
-            file.write("Train cost: {}s per example".format(train_cost))
-            file.write("Valid cost: {}s per example".format(valid_cost))
-            file.write("Test cost: {}s per example".format(test_cost))
-        
-            
-        
+    with open("CW_tiny_untgt_statistics.txt", "a+") as file: 
+        file.write("Time cost of generating per adv example: {}\n".format(time_cost/size))
+        file.write("L inf: {}\n".format(l_inf))
+        file.write("L 2: {}\n".format(l_2))
+        file.write("Clean accuracy: {}\n".format(clean_accuracy))
+        file.write("Fake accuracy: {}\n".format(fake_accuracy))
+        '''
+        # for 1000 itrs
+        file.write("Time cost of generating per adv example: {}s\n".format(87.34737510061264))
+        file.write("L inf: {}\n".format(0.6787849522819742))
+        file.write("L 2: {}\n".format(2.418086041701023))
+        file.write("Clean accuracy: {}\n".format(0.9959999918937683))
+        file.write("Fake accuracy: {}\n".format(0.006000000052154064))
+        '''
+

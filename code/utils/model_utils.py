@@ -44,6 +44,7 @@ def set_flags():
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
     flags.DEFINE_integer("PRE_EVAL_FREQUENCY", 1, "Frequency for pre evaluation") # 25
     flags.DEFINE_bool("load_AE", False, "Load AE from the last training result or not")
+    flags.DEFINE_string("AE_CKPT_RESTORE_NAME", "deep_cae.ckpt", "Name of ae ckpt")
     flags.DEFINE_bool("train_label", True, "Train and get label states, save into ckpt")
     flags.DEFINE_bool("early_stopping", False, "Use early stopping or not")
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
@@ -124,6 +125,13 @@ def set_flags():
     flags.DEFINE_float("BETA_Y_FAKE_CHANGE_EPOCHS", 10, "Change epochs of Beta Y FAKE") # 10
     flags.DEFINE_float("MIN_BETA_Y_FAKE", 0, "Minimum of beta Y FAKE") # 50
     flags.DEFINE_float("MAX_BETA_Y_FAKE", 0, "Maximum of beta Y FAKE") # 120
+    ## Beta y fake2
+    flags.DEFINE_float("BETA_Y_FAKE2", 0, "Coefficient for loss of Y FAKE") # 0
+    flags.DEFINE_string("BETA_Y_FAKE2_CHANGE_TYPE", "STEP", "Change type of Beta Y FAKE") # STEP, EXP, TIME
+    flags.DEFINE_float("BETA_Y_FAKE2_CHANGE_RATE", 1.2, "Change rate of Beta Y FAKE") # 1.2
+    flags.DEFINE_float("BETA_Y_FAKE2_CHANGE_EPOCHS", 10, "Change epochs of Beta Y FAKE") # 10
+    flags.DEFINE_float("MIN_BETA_Y_FAKE2", 0, "Minimum of beta Y FAKE") # 50
+    flags.DEFINE_float("MAX_BETA_Y_FAKE2", 0, "Maximum of beta Y FAKE") # 120
     ## Beta y clean
     flags.DEFINE_float("BETA_Y_CLEAN", 1, "Coefficient for loss of Y CLEAN") # 1
     flags.DEFINE_string("BETA_Y_CLEAN_CHANGE_TYPE", "STEP", "Change type of Beta Y CLEAN") # STEP, EXP, TIME
@@ -153,12 +161,18 @@ def set_flags():
     flags.DEFINE_float("MIN_BOUND", 0.001, "Minimum bound for pixel distance") # 4
     flags.DEFINE_float("MAX_BOUND", 1, "Maximum bound for pixel distance") # 128
     # bound change
+    flags.DEFINE_float("INIT_MIN_VALID_ACC", 1.0, "The init min_valid_acc")
+    flags.DEFINE_float("INIT_MAX_VALID_ACC", 0.0, "The init max_valid_acc")
+    flags.DEFINE_integer("ROLL_BACK_THRESHOLD", 5, "The threshold of roll back times for the same pixel")
     flags.DEFINE_float("ABS_DIFF_THRESHOLD", 5e-4, "Threshold of Absolute difference between Valid accs")
     flags.DEFINE_float("ADAPTIVE_UP_THRESHOLD", 0.05, "Upper bound of Valid acc change rate threshold")
     flags.DEFINE_float("ADAPTIVE_LOW_THRESHOLD", 0.01, "Lower bound of Valid acc change rate threshold") # 128
     flags.DEFINE_float("ADAPTIVE_BOUND_INC_RATE", 1.01, "Increasement rate of bound change rate")
     flags.DEFINE_float("ADAPTIVE_BOUND_DEC_RATE", 0.98, "Decreasement rate of bound change rate")
     # Attack params
+    flags.DEFINE_bool("IS_TARGETED_ATTACK", False, "targeted attack or not")
+    flags.DEFINE_integer("TARGETED_LABEL", 8, "The label of targeted class")
+    flags.DEFINE_string("ADV_PATH_PREFIX", "fgsm", "The path prefix for adv examples")
     flags.DEFINE_float("EPSILON", 1, "Epsilon for fgm attack") # 128
     flags.DEFINE_float("EPSILON_CHANGE_RATE", 0.8, "Epsilon change rate") # 128
     flags.DEFINE_float("EPSILON_CHANGE_EPOCHS", 100, "Num of epochs for epsilon change") # 100
@@ -190,3 +204,14 @@ def change_coef(last_value, change_rate, change_itr, change_type="STEP"):
     elif change_type == "TIME":
         init_value = last_value * (1.0 + change_rate * (change_itr-1))
         return init_value / (1.0 + change_rate * change_itr)
+
+def _one_hot_encode(inputs, encoded_size):
+    def get_one_hot(number):
+        on_hot=[0]*encoded_size
+        on_hot[int(number)]=1
+        return on_hot
+    #return list(map(get_one_hot, inputs))
+    if isinstance(inputs, list):
+        return list(map(get_one_hot, inputs))
+    else:
+        return get_one_hot(inputs)

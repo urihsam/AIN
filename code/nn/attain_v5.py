@@ -687,8 +687,10 @@ class ATTAIN:
         #saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
         saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope))
         saver.restore(sess, FLAGS.AE_PATH+'/'+scope+'/'+name)
+        print("Restore model from {}".format(FLAGS.AE_PATH+'/'+scope+'/'+name))
 
     def tf_save(self, sess, scope='autoencoder', name='deep_cae.ckpt'):
         #saver = tf.train.Saver(dict(self.conv_filters, **self.conv_biases, **self.decv_filters, **self.decv_biases))
         saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope))
         saver.save(sess, FLAGS.AE_PATH+'/'+scope+'/'+name)
+        print("Save model to {}".format(FLAGS.AE_PATH+'/'+scope+'/'+name))
