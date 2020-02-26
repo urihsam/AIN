@@ -2,7 +2,8 @@
 python3 ./code/run_attain_v6_mnist.py --NUM_EPOCHS 1 --BATCH_SIZE 200 --EVAL_FREQUENCY 100\
     --IS_TARGETED_ATTACK=True --TARGETED_LABEL 8\
     --DATA_DIR ../mnist --ADV_PATH_PREFIX fgsm_t8\
-    --AE_TYPE ATTAE --AE_PATH ./models/AE_TGT\
+    --SAVE_DIFF=True\
+    --AE_TYPE ATTAE --AE_PATH ./models/MNIST/AE_TGT\
     --ATT_TYPE TRAD\
     --load_AE=True --AE_CKPT_RESTORE_NAME deep_cae.Linf0.30006035466988884.Lx4.10327254931132.acc0.8544999957084656.ckpt\
     --INIT_MAX_VALID_ACC 1.0\

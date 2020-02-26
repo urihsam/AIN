@@ -5,7 +5,7 @@ import nn.vcae as vcae
 import nn.vcae_new as vcae_new
 import nn.cavcae as cavcae
 import nn.resnet as resnet
-import nn.ae.attresenc_v3 as attresenc
+import nn.ae.attresenc_v4 as attresenc
 import nn.ae.attresdec_v4 as attresdec
 import nn.embedder as embedder
 from utils.decorator import *
@@ -31,47 +31,51 @@ class ATTAIN:
 
         # Class label autoencoder
         with tf.variable_scope(FLAGS.LBL_NAME) as lbl_scope:
-            with tf.variable_scope("conditional"):
-                row = self.data.get_shape().as_list()[1]#data.get_shape().as_list()[1]
-                col = self.data.get_shape().as_list()[2]#int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
-                cha = 1#self.data.get_shape().as_list()[3]
-                img_shape = [row, col, cha]
-                size = np.prod(img_shape)
-                w1_shape = [label.get_shape().as_list()[-1], size]
-                w1 = ne.weight_variable(w1_shape, "lbl_W1", init_type="HE")
-                b1 = ne.bias_variable([size], "lbl_b1")
-                label_states = ne.sigmoid(ne.fully_conn(label, w1, b1))
-                label_states = ne.layer_norm(label_states, self.is_training)
-                #
-                w2_shape = [size, label.get_shape().as_list()[-1]]
-                w2 = ne.weight_variable(w2_shape, "lbl_W2", init_type="HE")
-                b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "lbl_b2")
-                self._recon_label = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
-                #
-                self._label_states = tf.reshape(label_states, [-1] + img_shape)
-                #self.labeled_data = tf.multiply(self.data, self._label_states) # 2
-                # self.labeled_data = tf.concat([self.data, self._label_states], -1) # 1
-
-            if FLAGS.USE_LABEL_MASK:
-                with tf.variable_scope("mask"):
-                    ## mask
-                    row = 64
-                    col = 64
-                    img_shape = [row, col]
+            if FLAGS.LABEL_CONDITIONING:
+                with tf.variable_scope("conditional"):
+                    row = self.data.get_shape().as_list()[1]#data.get_shape().as_list()[1]
+                    col = self.data.get_shape().as_list()[2]#int(math.ceil(FLAGS.NUM_CLASSES/data.get_shape().as_list()[1]))
+                    cha = 1#self.data.get_shape().as_list()[3]
+                    img_shape = [row, col, cha]
                     size = np.prod(img_shape)
                     w1_shape = [label.get_shape().as_list()[-1], size]
-                    w1 = ne.weight_variable(w1_shape, "mask_W1", init_type="HE")
-                    b1 = ne.bias_variable([size], "mask_b1")
-                    label_states = ne.tanh(ne.fully_conn(label, w1, b1))
+                    w1 = ne.weight_variable(w1_shape, "lbl_W1", init_type="HE")
+                    b1 = ne.bias_variable([size], "lbl_b1")
+                    label_states = ne.sigmoid(ne.fully_conn(label, w1, b1))
                     label_states = ne.layer_norm(label_states, self.is_training)
                     #
                     w2_shape = [size, label.get_shape().as_list()[-1]]
-                    w2 = ne.weight_variable(w2_shape, "mask_W2", init_type="HE")
-                    b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "mask_b2")
-                    self._recon_label_2 = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
+                    w2 = ne.weight_variable(w2_shape, "lbl_W2", init_type="HE")
+                    b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "lbl_b2")
+                    self._recon_label = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
                     #
-                    self._mask_states = tf.reshape(label_states, [-1] + img_shape)
+                    self._label_states = tf.reshape(label_states, [-1] + img_shape)
+                    #self.labeled_data = tf.multiply(self.data, self._label_states) # 2
+                    # self.labeled_data = tf.concat([self.data, self._label_states], -1) # 1
+
+                if FLAGS.USE_LABEL_MASK:
+                    with tf.variable_scope("mask"):
+                        ## mask
+                        row = 64
+                        col = 64
+                        img_shape = [row, col]
+                        size = np.prod(img_shape)
+                        w1_shape = [label.get_shape().as_list()[-1], size]
+                        w1 = ne.weight_variable(w1_shape, "mask_W1", init_type="HE")
+                        b1 = ne.bias_variable([size], "mask_b1")
+                        label_states = ne.tanh(ne.fully_conn(label, w1, b1))
+                        label_states = ne.layer_norm(label_states, self.is_training)
+                        #
+                        w2_shape = [size, label.get_shape().as_list()[-1]]
+                        w2 = ne.weight_variable(w2_shape, "mask_W2", init_type="HE")
+                        b2 = ne.bias_variable([label.get_shape().as_list()[-1]], "mask_b2")
+                        self._recon_label_2 = ne.sigmoid(ne.fully_conn(label_states, w2, b2))
+                        #
+                        self._mask_states = tf.reshape(label_states, [-1] + img_shape)
+                else:
+                    self._mask_states = None
             else:
+                self._label_states = tf.reshape(label_states, [-1] + img_shape)
                 self._mask_states = None
             
             if FLAGS.ADD_RANDOM:
@@ -232,7 +236,10 @@ class ATTAIN:
         Lx_true = beta_t * Lx_dist_true
 
         Lx_dist_fake = _dist(x_adv, x_fake)
-        Lx_fake = beta_f * Lx_dist_fake
+        if FLAGS.USE_IMITATION:
+            Lx_fake = beta_f * Lx_dist_fake
+        else:
+            Lx_fake = tf.constant(0.0)
 
         Lx = Lx_true + Lx_fake
 
@@ -418,9 +425,11 @@ class ATTAIN:
                     )
                 )
                 
-                
-
-            return beta_f * Ly_dist + beta_f2 * loss_logits, Ly_dist
+            if FLAGS.USE_IMITATION:
+                return beta_f * Ly_dist + beta_f2 * loss_logits, Ly_dist
+            else:
+                return beta_f * Ly_dist, Ly_dist
+        
         
         def loss_y_from_clean(): 
             y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
@@ -473,6 +482,9 @@ class ATTAIN:
         Ly_trans, Ly_dist_trans = loss_y_from_trans()
         Ly_fake, Ly_dist_fake = loss_y_from_fake()
         Ly_clean, Ly_dist_clean = loss_y_from_clean()
+        if FLAGS.IS_TARGETED_ATTACK == False and FLAGS.USE_IMITATION == False: # untargeted and no imitation
+            Ly_fake = tf.constant(0.0)
+            Ly_clean = tf.constant(0.0)
         Ly = Ly_trans + Ly_fake + Ly_clean
 
         tf.summary.scalar("Loss_y_trans", Ly_trans)
@@ -501,17 +513,18 @@ class ATTAIN:
     @lazy_property
     def pre_loss_label(self):
         loss = 0
-        cross_entropy = -tf.reduce_sum(
-            self.label * tf.log(1e-5+self._recon_label) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label),
-            axis = 1
-        )
-        loss += tf.reduce_mean(cross_entropy)
-        if FLAGS.USE_LABEL_MASK:
-            cross_entropy_2 = -tf.reduce_sum(
-                self.label * tf.log(1e-5+self._recon_label_2) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label_2),
+        if FLAGS.LABEL_CONDITIONING:
+            cross_entropy = -tf.reduce_sum(
+                self.label * tf.log(1e-5+self._recon_label) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label),
                 axis = 1
             )
-            loss += tf.reduce_mean(cross_entropy_2)
+            loss += tf.reduce_mean(cross_entropy)
+            if FLAGS.USE_LABEL_MASK:
+                cross_entropy_2 = -tf.reduce_sum(
+                    self.label * tf.log(1e-5+self._recon_label_2) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label_2),
+                    axis = 1
+                )
+                loss += tf.reduce_mean(cross_entropy_2)
         if FLAGS.ADD_RANDOM:
             cross_entropy_3 = -tf.reduce_sum(
                 self.label * tf.log(1e-5+self._recon_label_3) + (1-self.label) * tf.log(1e-5 + 1-self._recon_label_3),

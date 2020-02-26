@@ -27,6 +27,8 @@ def set_flags():
     flags.DEFINE_string("TRAIN_LOG_PATH", "./graphs/train", "Path of log for training")
     flags.DEFINE_string("VALID_LOG_PATH", "./graphs/valid", "Path of log for validation")
     flags.DEFINE_string("TEST_LOG_PATH", "./graphs/test", "Path of log for testing")
+    flags.DEFINE_string("VALID_LOG_FILENAME", "valid_log_.txt", "Path of log for validation")
+    flags.DEFINE_string("TEST_LOG_FILENAME", "test_log_.txt", "Path of log for testing")
     flags.DEFINE_string("DATA_DIR", "/Users/mashiru/Life/My-Emory/Research/Research-Project/Data/mnist", "Data dir")
     # Data description
     flags.DEFINE_bool("NORMALIZE", True, "Data is normalized to [0, 1]")
@@ -54,8 +56,10 @@ def set_flags():
     flags.DEFINE_bool("VARI", False, "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
     # AE params
     flags.DEFINE_integer("BOTTLENECK", 2048, "The size of bottleneck")
+    flags.DEFINE_bool("LABEL_CONDITIONING", True, "Whether use label conditioning")
     flags.DEFINE_bool("USE_LABEL_MASK", False, "Whether use label mask or not")
     flags.DEFINE_bool("ADD_RANDOM", False, "Whether add random noise to central states or not")
+    flags.DEFINE_bool("USE_IMITATION", True, "Wheteher use imitation or not")
     # Loss params
     flags.DEFINE_string("LOSS_MODE_TRANS", "C_W2", "How to calculate loss from fake imgae") # ENTRO, C_W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C_W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C_W
@@ -170,6 +174,7 @@ def set_flags():
     flags.DEFINE_float("ADAPTIVE_BOUND_INC_RATE", 1.01, "Increasement rate of bound change rate")
     flags.DEFINE_float("ADAPTIVE_BOUND_DEC_RATE", 0.98, "Decreasement rate of bound change rate")
     # Attack params
+    flags.DEFINE_bool("SAVE_DIFF", False, "save differences or not")
     flags.DEFINE_bool("IS_TARGETED_ATTACK", False, "targeted attack or not")
     flags.DEFINE_integer("TARGETED_LABEL", 8, "The label of targeted class")
     flags.DEFINE_string("ADV_PATH_PREFIX", "fgsm", "The path prefix for adv examples")

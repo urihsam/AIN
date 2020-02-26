@@ -1,5 +1,5 @@
 #!/bin/bash
-python3 ./code/run_attain_v6_tiny.py --train --NUM_EPOCHS 2000 --BATCH_SIZE 80 --EVAL_FREQUENCY 50\
+python3 ./code/run_attain_v6_tiny.py --NUM_EPOCHS 1 --BATCH_SIZE 80 --EVAL_FREQUENCY 50\
     --IS_TARGETED_ATTACK=True --TARGETED_LABEL 8\
     --DATA_DIR ../tiny-imagenet-200 --ADV_PATH_PREFIX fgsm_t8\
     --AE_TYPE ATTAE --AE_PATH ./models/TINY/AE_TGT\

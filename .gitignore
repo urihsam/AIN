@@ -6,6 +6,7 @@
 **/experiments/*
 **/results/*
 **/demo/*
+**/figures/**
 **/graphs/**
 **/*.old/*
 **/.DS_Store

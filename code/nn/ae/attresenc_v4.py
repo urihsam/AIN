@@ -8,8 +8,6 @@ from utils.decorator import lazy_method, lazy_method_no_scope
 
 class ATTRESENC(ABCCNN):
     def __init__(self,
-                 # condition info
-                 cond_pos_idx,
                  # attention layer
                  attention_type,
                  att_pos_idx=1, # att will be applied before att_pos_idx of conv_res_block
@@ -53,14 +51,16 @@ class ATTRESENC(ABCCNN):
                  out_padding = "SAME",
                  out_channel_size=3,
                  out_leaky_ratio=0.2,
+                 # random noise
+                 add_random_noise = False,
+                 mean = 0.0,
+                 stddev = 0.1,
                  # img channel
                  img_channel=None,
                  # switch
                  out_norm = None,
                  use_norm = None
                 ):
-        # condition info
-        self.cond_pos_idx = cond_pos_idx
         # attention
         self.attention_type = attention_type
         self.att_pos_idx = len(conv_filter_sizes) + att_pos_idx if att_pos_idx < 0 else att_pos_idx
@@ -130,6 +130,10 @@ class ATTRESENC(ABCCNN):
             self.out_padding = out_padding
             self.out_channel_size = out_channel_size
             self.out_leaky_ratio = out_leaky_ratio
+        # random noise
+        self.add_random_noise = add_random_noise
+        self.mean = mean
+        self.stddev = stddev
         # img channel
         if img_channel == None:
             self.img_channel = FLAGS.NUM_CHANNELS
@@ -181,18 +185,10 @@ class ATTRESENC(ABCCNN):
 
     @lazy_method
     def conv_weights_biases(self):
-        if self.cond_pos_idx == 0:
-            return self._conv_weights_biases("W_conv_", "b_conv_", self.conv_filter_sizes, self.img_channel+1, self.conv_channel_sizes)
-        else:
-            F = {}; B = {}; n_conv = 0
-            channel_sizes = self.conv_channel_sizes[:self.cond_pos_idx]
-            ftr, b, n_c = self._conv_weights_biases("W_conv_", "b_conv_", self.conv_filter_sizes, self.img_channel, channel_sizes)
-            F.update(ftr); B.update(b); n_conv += n_c
-            channel_sizes = self.conv_channel_sizes[self.cond_pos_idx:]
-            ftr, b, n_c = self._conv_weights_biases("W_conv_", "b_conv_", self.conv_filter_sizes, 
-                self.conv_channel_sizes[self.cond_pos_idx-1]+1, channel_sizes, name_shift=self.cond_pos_idx)
-            F.update(ftr); B.update(b); n_conv += n_c
-        return F, B, n_conv
+        in_channel_size = self.img_channel
+        if FLAGS.LABEL_CONDITIONING:
+            in_channel_size += 1
+        return self._conv_weights_biases("W_conv_", "b_conv_", self.conv_filter_sizes, in_channel_size, self.conv_channel_sizes)
 
 
     @lazy_method
@@ -219,7 +215,7 @@ class ATTRESENC(ABCCNN):
         #net = tf.reshape(inputs, [-1, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, self.img_channel])
         def _form_groups(net, start_layer, end_layer):
             for layer_id in range(start_layer, end_layer):
-                if layer_id == self.cond_pos_idx:
+                if layer_id == 0 and label_states != None:
                     net = tf.concat([net, label_states], -1)
                 filter_name = "{}{}".format(W_name, layer_id)
                 bias_name = "{}{}".format(b_name, layer_id)
@@ -297,22 +293,19 @@ class ATTRESENC(ABCCNN):
         net = inputs
         f = ne.conv2d(net, filters=self.att_filters[W_name+"f_0"], biases=None,
                       strides=self.att_f_strides, padding=self.att_f_padding) # [b, h, w, c]
+        if self.attention_type == "GOOGLE":
+            f = ne.max_pool_2x2(f)
         g = ne.conv2d(net, filters=self.att_filters[W_name+"g_0"], biases=None,
                       strides=self.att_g_strides, padding=self.att_g_padding) # [b, h, w, c]
         h = ne.conv2d(net, filters=self.att_filters[W_name+"h_0"], biases=None,
-                      strides=self.att_h_strides, padding=self.att_h_padding) 
+                      strides=self.att_h_strides, padding=self.att_h_padding) # [b, h, w, c]
         if self.attention_type == "GOOGLE":
-            f = ne.max_pool_2x2(f) # [b, h/2, w/2, c]
-            h = ne.max_pool_2x2(h) # [b, h/2, w/2, c]
-        elif self.attention_type == "DUOCONV":
-            f = ne.max_pool_2x2(ne.max_pool_2x2(f)) # [b, h/4, w/4, c]
-            h = ne.max_pool_2x2(ne.max_pool_2x2(h)) # [b, h/4, w/4, c]
-            
+            h = ne.max_pool_2x2(h)
 
-        # N = h/4 * w/4
-        s = tf.matmul(ne.hw_flatten(g), ne.hw_flatten(f), transpose_b=True) # [b, h*w, N]
-        beta = ne.softmax(s)  # attention map, [b, h*w, N]
-        o = tf.matmul(beta, ne.hw_flatten(h)) # [b, h*w, C]
+        # N = h * w
+        s = tf.matmul(ne.hw_flatten(g), ne.hw_flatten(f), transpose_b=True) # [b, N, N]
+        beta = ne.softmax(s)  # attention map, [b, N, N]
+        o = tf.matmul(beta, ne.hw_flatten(h)) # [b, N, C]
         o = tf.reshape(o, shape=[tf.shape(inputs)[0]] + inputs.get_shape().as_list()[1:-1]+[self.att_o_channel_size]) # [b, h, w, C]
         o = ne.conv2d(o, filters=self.att_filters[W_name+"o_0"], biases=None,
                       strides=self.att_o_strides, padding=self.att_o_padding) # [b, h, w, c]
@@ -346,14 +339,33 @@ class ATTRESENC(ABCCNN):
         #import pdb; pdb.set_trace()
         return net
 
+    @lazy_method
+    def random_noise_layer(self, inputs, random_mask):
+        net = inputs
+        random_noise = tf.random_normal(tf.shape(net), mean=self.mean, stddev=self.stddev)
+        if random_mask != None:
+            random_noise = tf.multiply(random_mask, random_noise)
+        net += random_noise
+        if self.use_norm == "BATCH":
+            net = ne.batch_norm(net, self.is_training)
+        elif self.use_norm == "LAYER":
+            net = ne.layer_norm(net, self.is_training)
+        elif self.use_norm == "INSTA":
+            net = ne.instance_norm(net, self.is_training)
+        net = tf.identity(net, name='rand_output')
+        return net
+
 
     @lazy_method
-    def evaluate(self, data, is_training, label_states):
+    def evaluate(self, data, is_training, label_states, random_states):
         self.is_training = is_training
         conv_res = self.conv_res_groups(data, label_states)
         #assert res.get_shape().as_list()[1:] == self.res_out_shape
         if self.use_out_layer:
             conv_res = self.out_layer(conv_res)
+        if self.add_random_noise:
+            print("random noise added")
+            conv_res = self.random_noise_layer(conv_res, random_states)
         return conv_res
 
 

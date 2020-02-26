@@ -52,22 +52,17 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
     l_y = 0; Ly_trans = 0; Ly_fake = 0; Ly_clean = 0; 
     Ly_dist_trans = 0; Ly_dist_fake = 0; Ly_dist_clean = 0
     
+    diff = []
+    ys = []
     for idx in range(total_batch):
         if valid:
             batch_xs, batch_ys, batch_atks = data.next_valid_batch(FLAGS.BATCH_SIZE, False)
         else:
             batch_xs, batch_ys, batch_atks = data.next_test_batch(FLAGS.BATCH_SIZE, False)
-        if FLAGS.IS_TARGETED_ATTACK:
-            batch_tgt_label = np.asarray(model_utils._one_hot_encode(
-                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
-        else:
-            batch_tgt_label = None
-            
         feed_dict = {
             graph_dict["images_holder"]: batch_xs,
             graph_dict["label_holder"]: batch_ys,
             graph_dict["atk_holder"]: batch_atks,
-            graph_dict["tgt_label_holder"]: batch_tgt_label,
             graph_dict["low_bound_holder"]: -1.0*FLAGS.PIXEL_BOUND,
             graph_dict["up_bound_holder"]: 1.0*FLAGS.PIXEL_BOUND,
             graph_dict["epsilon_holder"]: FLAGS.EPSILON,
@@ -80,6 +75,11 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             graph_dict["partial_loss_holder"]: FLAGS.PARTIAL_LOSS,
             graph_dict["is_training"]: False
         }
+        if FLAGS.IS_TARGETED_ATTACK:
+            batch_tgt_label = np.asarray(model_utils._one_hot_encode(
+                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
+            feed_dict[graph_dict["tgt_label_holder"]] = batch_tgt_label
+        
         
         batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_recon_loss, batch_label_loss, batch_sparse_loss, batch_var_loss, batch_reg, \
             batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, batch_Lx_dist_trans, \
@@ -87,6 +87,10 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             batch_l_y, batch_Ly_trans, batch_Ly_fake, batch_Ly_clean,\
             batch_Ly_dist_trans, batch_Ly_dist_fake, batch_Ly_dist_clean, \
             summary = sess.run(fetches=fetches, feed_dict=feed_dict)
+        if FLAGS.SAVE_DIFF:
+            batch_adv = sess.run(fetches=model.prediction, feed_dict=feed_dict)
+            diff.append(batch_adv-batch_xs)
+            ys.append(batch_ys)
         test_writer.add_summary(summary, idx)
         acc += batch_acc
         adv_acc += batch_adv_acc
@@ -139,6 +143,16 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
     Ly_dist_trans /= total_batch
     Ly_dist_fake /= total_batch
     Ly_dist_clean /= total_batch
+    if FLAGS.SAVE_DIFF:
+        diff = np.concatenate(diff, 0)
+        ys = np.concatenate(ys, 0)
+        if FLAGS.IS_TARGETED_ATTACK:
+            np.save("AIN_tgt_ys_diversity.npy", ys)
+            np.save("AIN_tgt_diversity.npy", diff)
+        else:
+            np.save("AIN_untgt_ys_diversity.npy", ys)
+            np.save("AIN_untgt_diversity.npy", diff)
+
 
     print('Original accuracy: {0:0.5f}'.format(acc))
     print('Faked accuracy: {0:0.5f}'.format(fake_acc))
@@ -223,9 +237,13 @@ def test():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+        if FLAGS.IS_TARGETED_ATTACK:
+            model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
                               epsilon_holder, is_training, 
                               targeted_label=tgt_label_holder)
+        else:
+            model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+                              epsilon_holder, is_training)
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -252,7 +270,8 @@ def test():
         # Load target classifier
         model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
         model.tf_load(sess, name=FLAGS.AE_CKPT_RESTORE_NAME)
-        model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
+        if FLAGS.LABEL_CONDITIONING:
+            model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         # tensorboard writer
         test_writer = model_utils.init_writer(FLAGS.TEST_LOG_PATH, g)
         print("\nTest")
@@ -260,27 +279,22 @@ def test():
             total_test_batch = 2
         else:
             total_test_batch = None
-        test_info(sess, model, test_writer, graph_dict, "tgt_test_log.txt", total_batch=total_test_batch)
+        test_info(sess, model, test_writer, graph_dict, FLAGS.TEST_LOG_FILENAME, total_batch=total_test_batch)
         test_writer.close() 
         
         
-        '''
-        batch_xs, batch_ys, batch_path = data.next_test_batch(FLAGS.BATCH_SIZE, True)
-        np.save("test_plot_clean_img.npy", batch_xs[0:10])
-        np.save("test_plot_clean_y.npy", batch_ys[0:10])
-        np.save("test_plot_clean_path.npy", batch_path[0:10])
-        '''
         batch_xs = np.load("test_plot_clean_img.npy")
         batch_ys = np.load("test_plot_clean_y.npy")
         feed_dict = {
             images_holder: batch_xs,
             label_holder: batch_ys,
-            tgt_label_holder: np.asarray(model_utils._one_hot_encode(
-                                [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES)),
             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
             is_training: False
         }
+        if FLAGS.IS_TARGETED_ATTACK:
+            feed_dict[tgt_label_holder]= np.asarray(model_utils._one_hot_encode(
+                                [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES))
         adv_images = sess.run(model.prediction, feed_dict=feed_dict)
         
         width = 10*28
@@ -297,9 +311,15 @@ def test():
 
         new_im.show()
         if FLAGS.IS_TARGETED_ATTACK:
-            new_im.save('AttAIN_MNIST_TGT_results.jpg')
+            if FLAGS.LABEL_CONDITIONING:
+                new_im.save('AttAIN_MNIST_TGT_results.jpg')
+            else:
+                new_im.save('AttAIN_MNIST_TGT_UNCOND_results.jpg')
         else:
-            new_im.save('AttAIN_MNIST_UNTGT_results.jpg')
+            if FLAGS.LABEL_CONDITIONING:
+                new_im.save('AttAIN_MNIST_UNTGT_results.jpg')
+            else:
+                new_im.save('AttAIN_MNIST_UNTGT_UNCOND_results.jpg')
         
 
 
@@ -336,8 +356,12 @@ def train():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
         # model
-        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+        if FLAGS.IS_TARGETED_ATTACK:
+            model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
                               epsilon_holder, is_training, atk_holder, tgt_label_holder)
+        else:
+            model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+                              epsilon_holder, is_training, atk_holder)
 
         # pre-training
         pre_label_loss = FLAGS.GAMMA_PRE_L * model.pre_loss_label
@@ -380,7 +404,8 @@ def train():
             print("Autoencoder loaded.")
             model.tf_load(sess, name=FLAGS.AE_CKPT_RESTORE_NAME)
             #model.tf_load(sess, name='deep_cae_last.ckpt')
-            model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
+            if FLAGS.LABEL_CONDITIONING:
+                model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         # For tensorboard
         train_writer = model_utils.init_writer(FLAGS.TRAIN_LOG_PATH, g)
         valid_writer = model_utils.init_writer(FLAGS.VALID_LOG_PATH, g)
@@ -397,41 +422,45 @@ def train():
             total_pre_valid_batch = int(data.valid_size/FLAGS.BATCH_SIZE)
         
 
-        if FLAGS.train_label:
-            print("Pre-training...")
-            for epoch in range(FLAGS.NUM_PRE_EPOCHS):
-                start_time = time.time()
-                for train_idx in range(total_pre_train_batch):
-                    batch_xs, batch_ys, _ = data.next_train_batch(FLAGS.BATCH_SIZE, True)
-                    feed_dict = {
-                        label_holder: batch_ys,
-                        is_training: True
-                    }
-                    fetches = [pre_op, pre_label_loss]
-                    _, pre_loss = sess.run(fetches=fetches, feed_dict=feed_dict)
-
-                if epoch % FLAGS.PRE_EVAL_FREQUENCY == (FLAGS.PRE_EVAL_FREQUENCY - 1):
-                    print("Training Result:")
-                    print("Pre Loss label = {:.4f}".format(pre_loss))
-                    pre_valid_loss = 0
-                    for valid_idx in range(total_pre_valid_batch):
-                        batch_xs, batch_ys, _ = data.next_valid_batch(FLAGS.BATCH_SIZE, True)
+        if FLAGS.LABEL_CONDITIONING:
+            print("Label Conditioning is on.")
+            if FLAGS.train_label:
+                print("Pre-training...")
+                for epoch in range(FLAGS.NUM_PRE_EPOCHS):
+                    start_time = time.time()
+                    for train_idx in range(total_pre_train_batch):
+                        batch_xs, batch_ys, _ = data.next_train_batch(FLAGS.BATCH_SIZE, True)
                         feed_dict = {
                             label_holder: batch_ys,
                             is_training: True
                         }
-                        fetches = pre_label_loss
-                        pre_valid_loss += sess.run(fetches=fetches, feed_dict=feed_dict)
-                    pre_valid_loss /= total_pre_valid_batch
-                    print("============================")
-                    print("Validation Result:")
-                    print("Pre Loss label = {:.4f}".format(pre_valid_loss))
-                    print("============================")
-            print("Save label states into ckpt...")
-            model.tf_save(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
+                        fetches = [pre_op, pre_label_loss]
+                        _, pre_loss = sess.run(fetches=fetches, feed_dict=feed_dict)
+
+                    if epoch % FLAGS.PRE_EVAL_FREQUENCY == (FLAGS.PRE_EVAL_FREQUENCY - 1):
+                        print("Training Result:")
+                        print("Pre Loss label = {:.4f}".format(pre_loss))
+                        pre_valid_loss = 0
+                        for valid_idx in range(total_pre_valid_batch):
+                            batch_xs, batch_ys, _ = data.next_valid_batch(FLAGS.BATCH_SIZE, True)
+                            feed_dict = {
+                                label_holder: batch_ys,
+                                is_training: True
+                            }
+                            fetches = pre_label_loss
+                            pre_valid_loss += sess.run(fetches=fetches, feed_dict=feed_dict)
+                        pre_valid_loss /= total_pre_valid_batch
+                        print("============================")
+                        print("Validation Result:")
+                        print("Pre Loss label = {:.4f}".format(pre_valid_loss))
+                        print("============================")
+                print("Save label states into ckpt...")
+                model.tf_save(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
+            else:
+                print("Loading label states from ckpt...")
+                model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         else:
-            print("Loading label states from ckpt...")
-            model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
+            print("Label Conditioning is off.")
         
         # reset learning rate
         sess.run(fetches=[model_lr_reset_op])
@@ -465,16 +494,10 @@ def train():
                 if FLAGS.NUM_ACCUM_ITERS != 1:
                     for accum_idx in range(FLAGS.NUM_ACCUM_ITERS):
                         batch_xs, batch_ys, batch_atks = data.next_train_batch(FLAGS.BATCH_SIZE, False)
-                        if FLAGS.IS_TARGETED_ATTACK:
-                            batch_tgt_label = np.asarray(model_utils._one_hot_encode(
-                                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
-                        else:
-                            batch_tgt_label = None
                         feed_dict = {
                             images_holder: batch_xs,
                             label_holder: batch_ys,
                             atk_holder: batch_atks,
-                            tgt_label_holder: batch_tgt_label,
                             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
                             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
                             epsilon_holder: FLAGS.EPSILON,
@@ -487,21 +510,20 @@ def train():
                             is_training: True,
                             partial_loss_holder: FLAGS.PARTIAL_LOSS
                         }
+                        if FLAGS.IS_TARGETED_ATTACK:
+                            batch_tgt_label = np.asarray(model_utils._one_hot_encode(
+                                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
+                            feed_dict[tgt_label_holder] = batch_tgt_label
+                        
                         sess.run(fetches=[model_accum_op], feed_dict=feed_dict)
                     sess.run(fetches=[model_avg_op])
                 
                 else:
                     batch_xs, batch_ys, batch_atks = data.next_train_batch(FLAGS.BATCH_SIZE, False)
-                    if FLAGS.IS_TARGETED_ATTACK:
-                        batch_tgt_label = np.asarray(model_utils._one_hot_encode(
-                            [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
-                    else:
-                        batch_tgt_label = None
                     feed_dict = {
                         images_holder: batch_xs,
                         label_holder: batch_ys,
                         atk_holder: batch_atks,
-                        tgt_label_holder: batch_tgt_label,
                         low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
                         up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
                         epsilon_holder: FLAGS.EPSILON,
@@ -517,6 +539,12 @@ def train():
                         is_training: True,
                         partial_loss_holder: FLAGS.PARTIAL_LOSS
                     }
+                    if FLAGS.IS_TARGETED_ATTACK:
+                        batch_tgt_label = np.asarray(model_utils._one_hot_encode(
+                            [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
+                        feed_dict[tgt_label_holder] = batch_tgt_label
+                    
+                    
                 """[res0, res1, res2] = sess.run([model.adv, model.fake, model.cross_entropy],
                                         feed_dict=feed_dict)
                 import pdb; pdb.set_trace()"""
@@ -580,7 +608,7 @@ def train():
             # validation
             print("\n******************************************************************")
             print("Validation")
-            valid_dict = test_info(sess, model, valid_writer, graph_dict, "tgt_valid_log.txt", total_batch=total_valid_batch, valid=True)
+            valid_dict = test_info(sess, model, valid_writer, graph_dict, FLAGS.VALID_LOG_FILENAME, total_batch=total_valid_batch, valid=True)
             
 
             #if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1: # stop

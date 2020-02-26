@@ -57,17 +57,10 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             batch_xs, batch_ys, batch_atks = data.next_valid_batch(FLAGS.BATCH_SIZE, False)
         else:
             batch_xs, batch_ys, batch_atks = data.next_test_batch(FLAGS.BATCH_SIZE, False)
-        if FLAGS.IS_TARGETED_ATTACK:
-            batch_tgt_label = np.asarray(model_utils._one_hot_encode(
-                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
-        else:
-            batch_tgt_label = None
-            
         feed_dict = {
             graph_dict["images_holder"]: batch_xs,
             graph_dict["label_holder"]: batch_ys,
             graph_dict["atk_holder"]: batch_atks,
-            graph_dict["tgt_label_holder"]: batch_tgt_label,
             graph_dict["low_bound_holder"]: -1.0*FLAGS.PIXEL_BOUND,
             graph_dict["up_bound_holder"]: 1.0*FLAGS.PIXEL_BOUND,
             graph_dict["epsilon_holder"]: FLAGS.EPSILON,
@@ -80,6 +73,13 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             graph_dict["partial_loss_holder"]: FLAGS.PARTIAL_LOSS,
             graph_dict["is_training"]: False
         }
+        if FLAGS.IS_TARGETED_ATTACK:
+            batch_tgt_label = np.asarray(model_utils._one_hot_encode(
+                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
+            feed_dict[graph_dict["tgt_label_holder"]] = batch_tgt_label
+
+            
+        
         
         batch_acc, batch_adv_acc, batch_fake_acc, batch_loss, batch_recon_loss, batch_label_loss, batch_sparse_loss, batch_var_loss, batch_reg, \
             batch_l_x, batch_lx_true, batch_lx_fake, batch_Lx_dist_true, batch_Lx_dist_fake, batch_Lx_dist_trans, \
@@ -223,9 +223,14 @@ def test():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
 
-        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+        if FLAGS.IS_TARGETED_ATTACK:
+            model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
                               epsilon_holder, is_training, 
                               targeted_label=tgt_label_holder)
+        else:
+            model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+                              epsilon_holder, is_training)
+
         merged_summary = tf.summary.merge_all()
 
         graph_dict = {}
@@ -279,12 +284,13 @@ def test():
         feed_dict = {
             images_holder: batch_xs,
             label_holder: batch_ys,
-            tgt_label_holder: np.asarray(model_utils._one_hot_encode(
-                                [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES)),
             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
             is_training: False
         }
+        if FLAGS.IS_TARGETED_ATTACK:
+            feed_dict[tgt_label_holder] = np.asarray(model_utils._one_hot_encode(
+                                [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES))
         adv_images = sess.run(model.prediction, feed_dict=feed_dict)
         
         width = 10*64
@@ -340,8 +346,12 @@ def train():
         partial_loss_holder = tf.placeholder(tf.string, ())
         is_training = tf.placeholder(tf.bool, ())
         # model
-        model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+        if FLAGS.IS_TARGETED_ATTACK:
+            model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
                               epsilon_holder, is_training, atk_holder, tgt_label_holder)
+        else:
+            model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+                              epsilon_holder, is_training, atk_holder)
 
         # pre-training
         pre_label_loss = FLAGS.GAMMA_PRE_L * model.pre_loss_label
@@ -469,16 +479,10 @@ def train():
                 if FLAGS.NUM_ACCUM_ITERS != 1:
                     for accum_idx in range(FLAGS.NUM_ACCUM_ITERS):
                         batch_xs, batch_ys, batch_atks = data.next_train_batch(FLAGS.BATCH_SIZE, False)
-                        if FLAGS.IS_TARGETED_ATTACK:
-                            batch_tgt_label = np.asarray(model_utils._one_hot_encode(
-                                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
-                        else:
-                            batch_tgt_label = None
                         feed_dict = {
                             images_holder: batch_xs,
                             label_holder: batch_ys,
                             atk_holder: batch_atks,
-                            tgt_label_holder: batch_tgt_label,
                             low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
                             up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
                             epsilon_holder: FLAGS.EPSILON,
@@ -491,21 +495,20 @@ def train():
                             is_training: True,
                             partial_loss_holder: FLAGS.PARTIAL_LOSS
                         }
+                        if FLAGS.IS_TARGETED_ATTACK:
+                            batch_tgt_label = np.asarray(model_utils._one_hot_encode(
+                                [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
+                            feed_dict[tgt_label_holder] = batch_tgt_label
+                        
                         sess.run(fetches=[model_accum_op], feed_dict=feed_dict)
                     sess.run(fetches=[model_avg_op])
                 
                 else:
                     batch_xs, batch_ys, batch_atks = data.next_train_batch(FLAGS.BATCH_SIZE, False)
-                    if FLAGS.IS_TARGETED_ATTACK:
-                        batch_tgt_label = np.asarray(model_utils._one_hot_encode(
-                            [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
-                    else:
-                        batch_tgt_label = None
                     feed_dict = {
                         images_holder: batch_xs,
                         label_holder: batch_ys,
                         atk_holder: batch_atks,
-                        tgt_label_holder: batch_tgt_label,
                         low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
                         up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
                         epsilon_holder: FLAGS.EPSILON,
@@ -521,6 +524,11 @@ def train():
                         is_training: True,
                         partial_loss_holder: FLAGS.PARTIAL_LOSS
                     }
+                    if FLAGS.IS_TARGETED_ATTACK:
+                        batch_tgt_label = np.asarray(model_utils._one_hot_encode(
+                            [int(FLAGS.TARGETED_LABEL)]*FLAGS.BATCH_SIZE, FLAGS.NUM_CLASSES))
+                        feed_dict[tgt_label_holder] = batch_tgt_label
+                    
                 """[res0, res1, res2] = sess.run([model.adv, model.fake, model.cross_entropy],
                                         feed_dict=feed_dict)
                 import pdb; pdb.set_trace()"""

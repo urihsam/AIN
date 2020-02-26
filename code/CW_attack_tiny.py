@@ -117,13 +117,13 @@ with tf.Session(graph=g) as sess:
     #import pdb; pdb.set_trace()
     l_inf = np.mean(
         np.amax(
-            np.absolute(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
+            np.absolute(np.reshape(adv_images, (size, 64*64*3))-np.reshape(batch_xs, (size, 64*64*3))), 
             axis=-1)
         )
     
     l_2 = np.mean(
         np.sqrt(np.sum(
-            np.square(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
+            np.square(np.reshape(adv_images, (size, 64*64*3))-np.reshape(batch_xs, (size, 64*64*3))), 
             axis=-1)
         ))
     print("L inf: {}".format(l_inf))
@@ -139,14 +139,14 @@ with tf.Session(graph=g) as sess:
     print("Clean accuracy: {}".format(clean_accuracy))
     print("Fake accuracy: {}".format(fake_accuracy))
 
-    width = 10*28
-    height = 2*28
-    new_im = Image.new('L', (width, height))
+    width = 10*64
+    height = 2*64
+    new_im = Image.new('RGB', (width, height))
     x_offset = 0
-    y_offset = 28
+    y_offset = 64
     for i in range(10):
-        im1 = Image.fromarray(np.reshape((batch_xs[i] * 255).astype(np.uint8), (28,28)))
-        im2 = Image.fromarray(np.reshape((adv_images[i]*255).astype(np.uint8), (28, 28)))
+        im1 = Image.fromarray(np.uint8(batch_xs[i]*255.0))
+        im2 = Image.fromarray(np.uint8(adv_images[i]*255.0))
         new_im.paste(im1, (x_offset, 0))
         new_im.paste(im2, (x_offset, y_offset))
         x_offset += im1.size[0]
