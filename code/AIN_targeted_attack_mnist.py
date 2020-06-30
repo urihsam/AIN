@@ -14,6 +14,7 @@ import os, math
 from PIL import Image
 from dependency import *
 import nn.mnist_classifier as mnist_cnn
+import nn.attain_v6_mnist as attain
 from utils import model_utils_mnist as model_utils
 from utils.fgsm_attack import fgm
 from utils.data_utils_mnist_raw import dataset
@@ -23,6 +24,7 @@ model_utils.set_flags()
 # In[3]:
 clean_train_saved = True
 clean_test_saved = True
+targeted_class_id = 8 # 0-9
 data = dataset(FLAGS.DATA_DIR, split_ratio=1.0, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
 
 valid_frequency = 1
@@ -34,137 +36,44 @@ stop_count = 5
 g = tf.get_default_graph()
 # attack_target = 8
 with g.as_default():
+    # Placeholder nodes.
     images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
     label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
-    with tf.variable_scope('target') as scope:
-        t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
-                            conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
-                            conv_channel_sizes=[16, 16, 32, 32, 64], 
-                            conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2, 0.2],
-                            conv_drop_rate=[0.0, 0.4, 0.1, 0.2, 0.0],
-                            num_res_block=1,
-                            res_block_size=1,
-                            res_filter_sizes=[1,1],
-                            res_leaky_ratio=0.2,
-                            res_drop_rate=0.2,
-                            out_state=4*4*64,
-                            out_fc_states=[1024, 256, 10],
-                            out_leaky_ratio=0.2,
-                            out_norm="NONE",
-                            use_norm="NONE",
-                            img_channel=1)
-        _, clean_pred = t_model.prediction(images_holder)
-        clean_acc = t_model.accuracy(clean_pred, label_holder)
-    with tf.variable_scope(scope, reuse=True):
-        t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
-                            conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
-                            conv_channel_sizes=[16, 16, 32, 32, 64], 
-                            conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2, 0.2],
-                            conv_drop_rate=[0.0, 0.4, 0.1, 0.2, 0.0],
-                            num_res_block=1,
-                            res_block_size=1,
-                            res_filter_sizes=[1,1],
-                            res_leaky_ratio=0.2,
-                            res_drop_rate=0.2,
-                            out_state=4*4*64,
-                            out_fc_states=[1024, 256, 10],
-                            out_leaky_ratio=0.2,
-                            out_norm="NONE",
-                            use_norm="NONE",
-                            img_channel=1)
-        data_fake = fgm(t_model.prediction, images_holder, label_holder, 
-                        eps=FLAGS.EPSILON, iters=FLAGS.FGM_ITERS, targeted=False, clip_min=0., clip_max=1.)
-    with tf.variable_scope(scope, reuse=True):
-        t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
-                            conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
-                            conv_channel_sizes=[16, 16, 32, 32, 64], 
-                            conv_leaky_ratio=[0.2, 0.2, 0.2, 0.2, 0.2],
-                            conv_drop_rate=[0.0, 0.4, 0.1, 0.2, 0.0],
-                            num_res_block=1,
-                            res_block_size=1,
-                            res_filter_sizes=[1,1],
-                            res_leaky_ratio=0.2,
-                            res_drop_rate=0.2,
-                            out_state=4*4*64,
-                            out_fc_states=[1024, 256, 10],
-                            out_leaky_ratio=0.2,
-                            out_norm="NONE",
-                            use_norm="NONE",
-                            img_channel=1)
-        _, fake_pred = t_model.prediction(data_fake)
-        fake_acc = t_model.accuracy(fake_pred, label_holder)
+    atk_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
+    tgt_label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
+    low_bound_holder = tf.placeholder(tf.float32, ())
+    up_bound_holder = tf.placeholder(tf.float32, ())
+    epsilon_holder = tf.placeholder(tf.float32, ())
+    beta_x_t_holder = tf.placeholder(tf.float32, ())
+    beta_x_f_holder = tf.placeholder(tf.float32, ())
+    beta_y_t_holder = tf.placeholder(tf.float32, ())
+    beta_y_f_holder = tf.placeholder(tf.float32, ())
+    beta_y_f2_holder = tf.placeholder(tf.float32, ())
+    beta_y_c_holder = tf.placeholder(tf.float32, ())
+    partial_loss_holder = tf.placeholder(tf.string, ())
+    is_training = tf.placeholder(tf.bool, ())
+
+    model = attain.ATTAIN(images_holder, label_holder, low_bound_holder, up_bound_holder, 
+                        epsilon_holder, is_training, targeted_label=tgt_label_holder)
+
+    data_adv = model.prediction
+    clean_acc = model._target_accuracy
+    adv_acc = model._target_adv_accuracy
+    #
 
 
-with tf.Session(graph=g) as sess:
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config, graph=g) as sess:
     #import pdb; pdb.set_trace()
     sess.run(tf.global_variables_initializer())
     # Load target classifier
-    t_model.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
+    model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
+    model.tf_load(sess, name=FLAGS.AE_CKPT_RESTORE_NAME)
 
     total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
     total_valid_batch = int(data.valid_size/FLAGS.BATCH_SIZE)
     total_test_batch = int(data.test_size/FLAGS.BATCH_SIZE)
-
-    # save training, test clean images
-    if not clean_train_saved:
-        # training, validation and test
-        for epoch in range(1):
-            print("Epoch {}: ".format(epoch))
-            
-            train_path = FLAGS.DATA_DIR + "/train"
-            if not os.path.exists(train_path):
-                os.mkdir(train_path)
-            for train_idx in range(total_train_batch):
-                batch_xs, batch_ys = data.next_train_batch(FLAGS.BATCH_SIZE)
-                img_path = train_path + "/{}".format(np.argmax(batch_ys[0]))
-                if not os.path.exists(img_path):
-                    os.mkdir(img_path)
-                clean_path = img_path + "/images"
-                
-                if not os.path.exists(clean_path):
-                    os.mkdir(clean_path)
-                
-                clean_filename = clean_path+"/{}.JPEG".format(train_idx)
-                
-                if not os.path.exists(clean_filename):
-                    #clean_im = Image.fromarray(np.squeeze((batch_xs[0]*255.0).astype(np.uint8)))
-                    #clean_im.save(clean_filename)
-                    np.save(clean_filename, batch_xs[0]*255.0)
-                
-            
-                if train_idx % 2500 == 2499:
-                    print("{} clean examples have been saved".format(train_idx+1))
-            
-            print("Training dataset done!\n")
-
-    # save test clean images
-    if not clean_test_saved:
-        # training, validation and test
-        for epoch in range(1):
-            print("Epoch {}: ".format(epoch))
-            test_path = FLAGS.DATA_DIR + "/test"
-            if not os.path.exists(test_path):
-                os.mkdir(test_path)
-            for test_idx in range(total_test_batch):
-                batch_xs, batch_ys = data.next_test_batch(FLAGS.BATCH_SIZE)
-                img_path = test_path + "/{}".format(np.argmax(batch_ys[0]))
-                if not os.path.exists(img_path):
-                    os.mkdir(img_path)
-                
-                clean_path = img_path + "/images"
-                if not os.path.exists(clean_path):
-                    os.mkdir(clean_path)
-                
-                clean_filename = clean_path+"/{}.JPEG".format(test_idx)
-                if not os.path.exists(clean_filename):
-                    #clean_im = Image.fromarray(np.squeeze((batch_xs[0]*255.0).astype(np.uint8)))
-                    #clean_im.save(clean_filename)
-                    np.save(clean_filename, batch_xs[0]*255.0)
-                
-            
-                if test_idx % 2500 == 2499:
-                    print("{} clean examples have been saved".format(test_idx+1))
-            print("Test dataset done!\n")
 
     
     # Adv training and test
@@ -180,7 +89,7 @@ with tf.Session(graph=g) as sess:
         for class_id in range(FLAGS.NUM_CLASSES):
             img_path = train_path + "/{}".format(class_id)
             clean_path = img_path + "/images"
-            atk_path = clean_path + "/fgsm"
+            atk_path = clean_path + "/AIN_t{}".format(targeted_class_id)
             if not os.path.exists(atk_path):
                 os.mkdir(atk_path)
             
@@ -199,16 +108,30 @@ with tf.Session(graph=g) as sess:
                     assert clean_img.shape == (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS)
                     clean_img = np.expand_dims(clean_img / 255.0, axis=0)
                     clean_label = np.expand_dims(model_utils._one_hot_encode(int(class_id), FLAGS.NUM_CLASSES), axis=0)
+                    targeted_label = np.expand_dims(model_utils._one_hot_encode(int(targeted_class_id), FLAGS.NUM_CLASSES), axis=0)
 
 
                     feed_dict = {
                         images_holder: clean_img, 
-                        label_holder: clean_label
-                    }                
+                        label_holder: clean_label,
+                        tgt_label_holder: targeted_label,
+                        low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
+                        up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
+                        epsilon_holder: FLAGS.EPSILON,
+                        beta_x_t_holder: FLAGS.BETA_X_TRUE,
+                        beta_x_f_holder: FLAGS.BETA_X_FAKE,
+                        beta_y_t_holder: FLAGS.BETA_Y_TRANS,
+                        beta_y_f_holder: FLAGS.BETA_Y_FAKE,
+                        beta_y_f2_holder: FLAGS.BETA_Y_FAKE2,
+                        beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
+                        is_training: False,
+                        partial_loss_holder: FLAGS.PARTIAL_LOSS
+                        }
+                                   
                     #import pdb; pdb.set_trace()
                     start = time.time()
                     # c&w attack
-                    atk_data = sess.run(fetches=data_fake, feed_dict=feed_dict)
+                    atk_data = sess.run(fetches=data_adv, feed_dict=feed_dict)
                     time_cost += (time.time() - start)
                     # save
                     #import pdb; pdb.set_trace()
@@ -236,7 +159,7 @@ with tf.Session(graph=g) as sess:
                 if train_count % 2500 == 2499:
                     print("{} adversarial examples have been generated".format(train_count))
                     print("Random clean example acc:{}".format(sess.run(clean_acc, feed_dict)))
-                    print("Random adv example acc:{}".format(sess.run(fake_acc, feed_dict)))
+                    print("Random adv example acc:{}".format(sess.run(adv_acc, feed_dict)))
                     print("Random adv example distance:{}".format(np.max(atk_data[0]-clean_img[0])))
         
         if train_count !=0:
@@ -254,7 +177,7 @@ with tf.Session(graph=g) as sess:
         for class_id in range(FLAGS.NUM_CLASSES):
             img_path = train_path + "/{}".format(class_id)
             clean_path = img_path + "/images"
-            atk_path = clean_path + "/fgsm"
+            atk_path = clean_path + "/AIN_t{}".format(targeted_class_id)
             if not os.path.exists(atk_path):
                 os.mkdir(atk_path)
             
@@ -272,16 +195,30 @@ with tf.Session(graph=g) as sess:
                     assert clean_img.shape == (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS)
                     clean_img = np.expand_dims(clean_img / 255.0, axis=0)
                     clean_label = np.expand_dims(model_utils._one_hot_encode(int(class_id), FLAGS.NUM_CLASSES), axis=0)
+                    targeted_label = np.expand_dims(model_utils._one_hot_encode(int(targeted_class_id), FLAGS.NUM_CLASSES), axis=0)
+
 
                 
                     feed_dict = {
                         images_holder: clean_img, 
-                        label_holder: clean_label
-                    }                
+                        label_holder: clean_label,
+                        tgt_label_holder: targeted_label,
+                        low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
+                        up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
+                        epsilon_holder: FLAGS.EPSILON,
+                        beta_x_t_holder: FLAGS.BETA_X_TRUE,
+                        beta_x_f_holder: FLAGS.BETA_X_FAKE,
+                        beta_y_t_holder: FLAGS.BETA_Y_TRANS,
+                        beta_y_f_holder: FLAGS.BETA_Y_FAKE,
+                        beta_y_f2_holder: FLAGS.BETA_Y_FAKE2,
+                        beta_y_c_holder: FLAGS.BETA_Y_CLEAN,
+                        is_training: False,
+                        partial_loss_holder: FLAGS.PARTIAL_LOSS
+                        }               
                     #import pdb; pdb.set_trace()
                     start = time.time()
                     # c&w attack
-                    atk_data = sess.run(fetches=data_fake, feed_dict=feed_dict)
+                    atk_data = sess.run(fetches=data_adv, feed_dict=feed_dict)
                     time_cost += (time.time() - start)
                     # save
                     #import pdb; pdb.set_trace()
@@ -308,7 +245,7 @@ with tf.Session(graph=g) as sess:
                 if test_count % 2500 == 2499:
                     print("{} adversarial examples have been generated".format(test_count))
                     print("Random clean example acc:{}".format(sess.run(clean_acc, feed_dict)))
-                    print("Random adv example acc:{}".format(sess.run(fake_acc, feed_dict)))
+                    print("Random adv example acc:{}".format(sess.run(adv_acc, feed_dict)))
                     print("Random adv example distance:{}".format(np.max(atk_data[0]-clean_img[0])))
             
         if test_count != 0:
@@ -320,30 +257,37 @@ with tf.Session(graph=g) as sess:
 
         print("Train cost: {}s per example".format(train_cost))
         print("Test cost: {}s per example".format(test_cost))
-        print("L inf distance of train adv example: {}".format(train_l_inf/train_l_count))
-        print("L 2 distance of train adv example: {}".format(train_l_2/train_l_count))
-        print("L inf distance of test adv example: {}".format(test_l_inf/test_l_count))
-        print("L 2 distance of test adv example: {}".format(test_l_2/test_l_count))
-        with open("fgsm_targeted_info.txt", "a+") as file: 
+        if train_l_count != 0.0:
+            print("L inf distance of train adv example: {}".format(train_l_inf/train_l_count))
+            print("L 2 distance of train adv example: {}".format(train_l_2/train_l_count))
+        if test_l_count != 0.0:
+            print("L inf distance of test adv example: {}".format(test_l_inf/test_l_count))
+            print("L 2 distance of test adv example: {}".format(test_l_2/test_l_count))
+        with open("AIN_targeted_info.txt", "a+") as file: 
             file.write("Train cost: {}s per example\n".format(train_cost))
             file.write("Test cost: {}s per example\n".format(test_cost))
-            file.write("L inf distance of train adv example: {}\n".format(train_l_inf/train_l_count))
-            file.write("L 2 distance of train adv example: {}\n".format(train_l_2/train_l_count))
-            file.write("L inf distance of test adv example: {}\n".format(test_l_inf/test_l_count))
-            file.write("L 2 distance of test adv example: {}\n".format(test_l_2/test_l_count))
+            if train_l_count != 0.0:
+                file.write("L inf distance of train adv example: {}\n".format(train_l_inf/train_l_count))
+                file.write("L 2 distance of train adv example: {}\n".format(train_l_2/train_l_count))
+            if test_l_count != 0.0:
+                file.write("L inf distance of test adv example: {}\n".format(test_l_inf/test_l_count))
+                file.write("L 2 distance of test adv example: {}\n".format(test_l_2/test_l_count))
 
     
     batch_xs = np.load("test_plot_clean_img.npy")
     batch_ys = np.load("test_plot_clean_y.npy")
 
+    targeted_label = np.asarray(model_utils._one_hot_encode(
+                        [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES))
 
     #import pdb; pdb.set_trace()
     feed_dict = {
         images_holder: batch_xs, 
-        label_holder: batch_ys
+        label_holder: batch_ys,
+        tgt_label_holder: targeted_label
     }
     # c&w attack
-    adv_images = sess.run(fetches=data_fake, feed_dict=feed_dict)
+    adv_images = sess.run(fetches=data_adv, feed_dict=feed_dict)
 
     width = 10*28
     height = 2*28
@@ -358,6 +302,6 @@ with tf.Session(graph=g) as sess:
         x_offset += im1.size[0]
 
     new_im.show()
-    new_im.save('iFGSM_MNIST_UNTGT_results.jpg')
+    new_im.save('AIN_MNIST_TGT_results.jpg')
 
 

@@ -37,12 +37,15 @@ def set_flags():
     flags.DEFINE_integer("IMAGE_ROWS", 224, "Input row dimension")
     flags.DEFINE_integer("IMAGE_COLS", 224, "Input column dimension")
     flags.DEFINE_integer("NUM_CHANNELS", 3, "Input depth dimension")
+    # GPU params
+    flags.DEFINE_string("GPU_INDEX", "0", "GPU index number")
     # Training params
     flags.DEFINE_integer("NUM_EPOCHS", 1, "Number of epochs") # 200
     flags.DEFINE_integer("NUM_PRE_EPOCHS", 2, "Number of epochs") # 200
     flags.DEFINE_integer("NUM_ACCUM_ITERS", 2, "Number of accumulation") # 2
     flags.DEFINE_integer("BATCH_SIZE", 128, "Size of training batches")# 128
     flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
+    flags.DEFINE_integer("VALID_FREQUENCY", 1, "Frequency for evaluation (epoch)") # 25
     flags.DEFINE_integer("PRE_EVAL_FREQUENCY", 1, "Frequency for pre evaluation") # 25
     flags.DEFINE_bool("load_AE", False, "Load AE from the last training result or not")
     flags.DEFINE_bool("train_label", True, "Train and get label states, save into ckpt")

@@ -1,6 +1,7 @@
 #!/bin/bash
-python3 ./code/fgsm_attack_tiny.py --NUM_EPOCHS 1 --BATCH_SIZE 1\
+python3 ./code/fgsm_attack_tiny_diversity.py --NUM_EPOCHS 1 --BATCH_SIZE 500\
     --DATA_DIR ../tiny-imagenet-200\
+    --IS_TARGETED_ATTACK=False --ADV_PATH_PREFIX fgsm\
     --IMAGE_ROWS 64 --IMAGE_COLS 64 --NUM_CHANNELS 3\
     --NUM_CLASSES 200\
     --EPSILON 2e-4\

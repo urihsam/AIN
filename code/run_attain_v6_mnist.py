@@ -1,5 +1,5 @@
+import os, math, time
 import nn.attain_v6_mnist as attain
-import os, math
 from PIL import Image
 from dependency import *
 import utils.model_utils_mnist as  model_utils
@@ -11,6 +11,7 @@ model_utils.set_flags()
 
 data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED, 
     adv_path_prefix=FLAGS.ADV_PATH_PREFIX)
+os.environ["CUDA_VISIBLE_DEVICES"] = FLAGS.GPU_INDEX
 
 
 def main(arvg=None):
@@ -91,7 +92,7 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
             batch_adv = sess.run(fetches=model.prediction, feed_dict=feed_dict)
             diff.append(batch_adv-batch_xs)
             ys.append(batch_ys)
-        test_writer.add_summary(summary, idx)
+        #test_writer.add_summary(summary, idx)
         acc += batch_acc
         adv_acc += batch_adv_acc
         fake_acc += batch_fake_acc
@@ -183,6 +184,7 @@ def test_info(sess, model, test_writer, graph_dict, log_file, total_batch=None, 
         file.write("Ly distance for trans = {:.4f} Ly distance for fake = {:.4f} Ly distance for clean = {:.4f} \n".format(
             Ly_dist_trans, Ly_dist_fake, Ly_dist_clean))
         file.write("############################################\n")
+        file.flush()
     
     res_dict = {"acc": acc, 
                 "fake_acc": fake_acc,
@@ -265,7 +267,9 @@ def test():
         graph_dict["merged_summary"] = merged_summary
         
 
-    with tf.Session(graph=g) as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config, graph=g) as sess:
         sess.run(tf.global_variables_initializer())
         # Load target classifier
         model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
@@ -273,18 +277,62 @@ def test():
         if FLAGS.LABEL_CONDITIONING:
             model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         # tensorboard writer
-        test_writer = model_utils.init_writer(FLAGS.TEST_LOG_PATH, g)
+        #test_writer = model_utils.init_writer(FLAGS.TEST_LOG_PATH, g)
         print("\nTest")
         if FLAGS.local:
             total_test_batch = 2
         else:
             total_test_batch = None
-        test_info(sess, model, test_writer, graph_dict, FLAGS.TEST_LOG_FILENAME, total_batch=total_test_batch)
-        test_writer.close() 
+        if FLAGS.USE_IMITATION == False:
+            postfix = "_no_imit"
+        else:
+            if FLAGS.ONLY_IMITATION:
+                postfix = "_only_imit"
+            else:
+                postfix = ""
+        if FLAGS.IS_TARGETED_ATTACK:
+            log_file_name = "tgt_mnist_test_log{}.txt".format(postfix)
+        else:
+            log_file_name = "untgt_mnist_test_log{}.txt".format(postfix)
+        test_info(sess, model, None, graph_dict, log_file_name, total_batch=total_test_batch)
+        #test_writer.close() 
         
+        size = 500
+        batch_xs, batch_ys, _ = data.next_test_batch(size, True)
+        targeted_label = np.asarray(model_utils._one_hot_encode(
+                            [int(FLAGS.TARGETED_LABEL)]*size, FLAGS.NUM_CLASSES))
+        feed_dict = {
+            images_holder: batch_xs,
+            label_holder: batch_ys,
+            low_bound_holder: -1.0*FLAGS.PIXEL_BOUND,
+            up_bound_holder: 1.0*FLAGS.PIXEL_BOUND,
+            is_training: False
+        }
+        if FLAGS.IS_TARGETED_ATTACK:
+            feed_dict[tgt_label_holder]= np.asarray(model_utils._one_hot_encode(
+                                [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES))
+        # attack
+        start = time.time()
+        adv_images = sess.run(fetches=model.prediction, feed_dict=feed_dict)
+        time_cost = (time.time() - start)
+        l_inf = np.mean(
+            np.amax(
+                np.absolute(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
+                axis=-1)
+            )
         
-        batch_xs = np.load("test_plot_clean_img.npy")
-        batch_ys = np.load("test_plot_clean_y.npy")
+        l_2 = np.mean(
+            np.sqrt(np.sum(
+                np.square(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
+                axis=-1)
+            ))
+    
+        print("L inf: {}".format(l_inf))
+        print("L 2: {}".format(l_2))
+        print("Time cost:", time_cost/500)
+        
+        batch_xs = np.load("mnist_plot_examples.npy")/255.0
+        batch_ys = np.load("mnist_plot_example_labels.npy")
         feed_dict = {
             images_holder: batch_xs,
             label_holder: batch_ys,
@@ -310,16 +358,18 @@ def test():
             x_offset += im1.size[0]
 
         new_im.show()
-        if FLAGS.IS_TARGETED_ATTACK:
-            if FLAGS.LABEL_CONDITIONING:
-                new_im.save('AttAIN_MNIST_TGT_results.jpg')
-            else:
-                new_im.save('AttAIN_MNIST_TGT_UNCOND_results.jpg')
+        if FLAGS.USE_IMITATION == False:
+            postfix = "_no_imit"
         else:
-            if FLAGS.LABEL_CONDITIONING:
-                new_im.save('AttAIN_MNIST_UNTGT_results.jpg')
+            if FLAGS.ONLY_IMITATION:
+                postfix = "_only_imit"
             else:
-                new_im.save('AttAIN_MNIST_UNTGT_UNCOND_results.jpg')
+                postfix = ""
+        if FLAGS.IS_TARGETED_ATTACK:
+            img_name = "AIN_MNIST_TGT{}.jpg".format(postfix)
+        else:
+            img_name = "AIN_MNIST_UNTGT{}.jpg".format(postfix)
+        new_im.save(img_name)
         
 
 
@@ -396,7 +446,10 @@ def train():
         graph_dict["is_training"] = is_training
         graph_dict["merged_summary"] = merged_summary
 
-    with tf.Session(graph=g) as sess:
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config, graph=g) as sess:
         sess.run(tf.global_variables_initializer())
         # Load target classifier
         model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
@@ -407,8 +460,8 @@ def train():
             if FLAGS.LABEL_CONDITIONING:
                 model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
         # For tensorboard
-        train_writer = model_utils.init_writer(FLAGS.TRAIN_LOG_PATH, g)
-        valid_writer = model_utils.init_writer(FLAGS.VALID_LOG_PATH, g)
+        #train_writer = model_utils.init_writer(FLAGS.TRAIN_LOG_PATH, g)
+        #valid_writer = model_utils.init_writer(FLAGS.VALID_LOG_PATH, g)
         
         if FLAGS.local:
             total_train_batch = 2
@@ -567,7 +620,7 @@ def train():
                     clean_acc, adv_acc, fake_acc = sess.run(fetches=fetches, feed_dict=feed_dict)
                 
                 #import pdb; pdb.set_trace()
-                train_writer.add_summary(summary, train_idx)
+                #train_writer.add_summary(summary, train_idx)
                 # Print info
                 if train_idx % FLAGS.EVAL_FREQUENCY == (FLAGS.EVAL_FREQUENCY - 1):
                     print("Epoch: {}".format(epoch+1))
@@ -606,40 +659,52 @@ def train():
             end_time = time.time()
             print('Eopch {} completed with time {:.2f} s'.format(epoch+1, end_time-start_time))
             # validation
-            print("\n******************************************************************")
-            print("Validation")
-            valid_dict = test_info(sess, model, valid_writer, graph_dict, FLAGS.VALID_LOG_FILENAME, total_batch=total_valid_batch, valid=True)
-            
-
-            #if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1: # stop
-            if valid_dict["max_dist_true"] <= valid_dict["max_dist_trans"]: # stop
-                break
-            else:
-                ckpt_name='deep_cae.Linf{:.6f}.Lx{:.6f}.acc{:.6f}.ckpt'.format(
-                    valid_dict["max_dist_true"],
-                    valid_dict["Lx_dist_true"],
-                    valid_dict["adv_acc"]
-                    )
-                if FLAGS.IS_TARGETED_ATTACK:
-                    if valid_dict["adv_acc"] >= max_valid_acc:
-                        if valid_dict["Lx_dist_true"] <= min_lx_dist:
-                            print("Find model at bound step {} has larger valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
-                            model.tf_save(sess, name=ckpt_name) # extra store
-                            model.tf_save(sess)
-                            max_valid_acc = valid_dict["adv_acc"]
-                            min_lx_dist = valid_dict["Lx_dist_true"]
-                            print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
+            if epoch % FLAGS.VALID_FREQUENCY == FLAGS.VALID_FREQUENCY-1:
+                print("\n******************************************************************")
+                print("Validation")
+                if FLAGS.USE_IMITATION == False:
+                    postfix = "_no_imit"
                 else:
-                    if valid_dict["adv_acc"] <= min_valid_acc:
-                        if valid_dict["Lx_dist_true"] <= min_lx_dist:
-                            print("Find model at bound step {} has smaller valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
-                            model.tf_save(sess, name=ckpt_name) # extra store
-                            model.tf_save(sess)
-                            min_valid_acc = valid_dict["adv_acc"]
-                            min_lx_dist = valid_dict["Lx_dist_true"]
-                            print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
+                    if FLAGS.ONLY_IMITATION:
+                        postfix = "_only_imit"
+                    else:
+                        postfix = ""
+                if FLAGS.IS_TARGETED_ATTACK:
+                    valid_log_name = "tgt_mnist_valid_log{}.txt".format(postfix)
+                else:
+                    valid_log_name = "untgt_mnist_valid_log{}.txt".format(postfix)
+                valid_dict = test_info(sess, model, None, graph_dict, valid_log_name, total_batch=total_valid_batch, valid=True)
                 
-            print("******************************************************************")
+
+                #if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1: # stop
+                if valid_dict["max_dist_true"] <= valid_dict["max_dist_trans"]: # stop
+                    break
+                else:
+                    ckpt_name='deep_cae.Linf{:.6f}.Lx{:.6f}.acc{:.6f}.ckpt'.format(
+                        valid_dict["max_dist_true"],
+                        valid_dict["Lx_dist_true"],
+                        valid_dict["adv_acc"]
+                        )
+                    if FLAGS.IS_TARGETED_ATTACK:
+                        if valid_dict["adv_acc"] >= max_valid_acc:
+                            if valid_dict["Lx_dist_true"] <= min_lx_dist:
+                                print("Find model at bound step {} has larger valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
+                                model.tf_save(sess, name=ckpt_name) # extra store
+                                model.tf_save(sess)
+                                max_valid_acc = valid_dict["adv_acc"]
+                                min_lx_dist = valid_dict["Lx_dist_true"]
+                                print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
+                    else:
+                        if valid_dict["adv_acc"] <= min_valid_acc:
+                            if valid_dict["Lx_dist_true"] <= min_lx_dist:
+                                print("Find model at bound step {} has smaller valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
+                                model.tf_save(sess, name=ckpt_name) # extra store
+                                model.tf_save(sess)
+                                min_valid_acc = valid_dict["adv_acc"]
+                                min_lx_dist = valid_dict["Lx_dist_true"]
+                                print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
+                    
+                print("******************************************************************")
             print()
             print()
 
@@ -650,8 +715,26 @@ def train():
                     curr_valid_acc = max_valid_acc # max valid acc for current bound
                 else:
                     curr_valid_acc = min_valid_acc # min valid acc for current bound
+                # re-init
+                sess.run(tf.global_variables_initializer())
+                # Load target classifier
+                model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
                 model.tf_load(sess) # corresponding model for min valid acc
-                valid_dict = test_info(sess, model, valid_writer, graph_dict, "tgt_valid_log.txt", total_batch=total_valid_batch, valid=True)
+                if FLAGS.LABEL_CONDITIONING:
+                    model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
+                
+                if FLAGS.USE_IMITATION == False:
+                    postfix = "_no_imit"
+                else:
+                    if FLAGS.ONLY_IMITATION:
+                        postfix = "_only_imit"
+                    else:
+                        postfix = ""
+                if FLAGS.IS_TARGETED_ATTACK:
+                    valid_log_name = "tgt_mnist_valid_log{}.txt".format(postfix)
+                else:
+                    valid_log_name = "untgt_mnist_valid_log{}.txt".format(postfix)
+                valid_dict = test_info(sess, model, None, graph_dict, valid_log_name, total_batch=total_valid_batch, valid=True)
                 print()
                 print("Changing bounds...")
                 print("Roll back hit: {}".format(roll_back_hit))
@@ -671,9 +754,14 @@ def train():
                 # FLAGS.ABS_DIFF_THRESHOLD 5e-4
                 # change_itr != 0 : not first time
                 if change_itr != 0 and roll_back_hit < FLAGS.ROLL_BACK_THRESHOLD and absolute_diff > FLAGS.ABS_DIFF_THRESHOLD and acc_change_ratio > FLAGS.ADAPTIVE_UP_THRESHOLD: # roll back
-                    # reset model
+                    # re-init
+                    sess.run(tf.global_variables_initializer())
+                    # Load target classifier
+                    model._target.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
                     model.tf_load(sess, name='deep_cae_last.ckpt')
-                    model.tf_save(sess)
+                    if FLAGS.LABEL_CONDITIONING:
+                        model.tf_load(sess, scope=FLAGS.LBL_NAME, name="label_states.ckpt")
+
                     if FLAGS.IS_TARGETED_ATTACK:
                         max_valid_acc = last_max_valid_acc
                     else:
@@ -699,6 +787,8 @@ def train():
                     else:
                         roll_back_pixel = last_pixel_bound
                         roll_back_hit = 0
+                    # save model
+                    model.tf_save(sess)
                 else:
                     if roll_back_hit == 0 and acc_change_ratio < FLAGS.ADAPTIVE_LOW_THRESHOLD: # sppedup
                         FLAGS.BOUND_CHANGE_RATE = FLAGS.BOUND_CHANGE_RATE * FLAGS.ADAPTIVE_BOUND_DEC_RATE
@@ -747,8 +837,8 @@ def train():
         print("Optimization Finished!")
 
 
-        train_writer.close() 
-        valid_writer.close()
+        #train_writer.close() 
+        #valid_writer.close()
 
 
 if __name__ == '__main__':

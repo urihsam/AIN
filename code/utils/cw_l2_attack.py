@@ -233,7 +233,8 @@ class cwl2:
                     else:
                         thre_count = 0
                         prev_loss = l
-                    if thre_count >= self.ABORT_THRE or l2s > self.L2_THRE:
+                    #if thre_count >= self.ABORT_THRE or l2s > self.L2_THRE:
+                    if thre_count >= self.ABORT_THRE or l2s.any() > self.L2_THRE:    
                         break
                     
 

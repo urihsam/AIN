@@ -1,5 +1,5 @@
 #!/bin/bash
-python3 ./code/fgsm_targeted_attack_mnist.py --NUM_EPOCHS 1 --BATCH_SIZE 1\
+python3 ./code/ensemble_adv_test_mnist_ifgsm.py --NUM_EPOCHS 100 --BATCH_SIZE 100\
     --DATA_DIR ../mnist-new\
     --IMAGE_ROWS 28 --IMAGE_COLS 28 --NUM_CHANNELS 1\
     --NUM_CLASSES 10\

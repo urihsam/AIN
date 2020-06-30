@@ -6,7 +6,8 @@ import nn.vcae_new as vcae_new
 import nn.cavcae as cavcae
 import nn.resnet as resnet
 import nn.ae.attresenc_v4 as attresenc
-import nn.ae.attresdec_v4 as attresdec
+#import nn.ae.attresdec_v4 as attresdec
+import nn.ae.attresdec_v5 as attresdec
 import nn.embedder as embedder
 from utils.decorator import *
 from dependency import *
@@ -238,6 +239,8 @@ class ATTAIN:
         Lx_dist_fake = _dist(x_adv, x_fake)
         if FLAGS.USE_IMITATION:
             Lx_fake = beta_f * Lx_dist_fake
+            if FLAGS.ONLY_IMITATION:
+                Lx_true = tf.constant(0.0)
         else:
             Lx_fake = tf.constant(0.0)
 
@@ -246,15 +249,15 @@ class ATTAIN:
         # print info
         Lx_dist_trans = _dist(x_true, x_fake)
 
-        tf.summary.scalar("Loss_x", Lx)
-        tf.summary.scalar("Loss_x_true", Lx_true)
-        tf.summary.scalar("Loss_x_fake", Lx_fake)
-        tf.summary.scalar("Dist_x_true", Lx_dist_true)
-        tf.summary.scalar("Dist_x_fake", Lx_dist_fake)
-        tf.summary.scalar("Dist_x_trans", Lx_dist_trans)
-        tf.summary.scalar("Max_pixel_dist_true", max_dist_true)
-        tf.summary.scalar("Max_pixel_dist_fake", max_dist_fake)
-        tf.summary.scalar("Max_pixel_dist_trans", max_dist_trans)
+        #tf.summary..scalar("Loss_x", Lx)
+        #tf.summary..scalar("Loss_x_true", Lx_true)
+        #tf.summary..scalar("Loss_x_fake", Lx_fake)
+        #tf.summary..scalar("Dist_x_true", Lx_dist_true)
+        #tf.summary..scalar("Dist_x_fake", Lx_dist_fake)
+        #tf.summary..scalar("Dist_x_trans", Lx_dist_trans)
+        #tf.summary..scalar("Max_pixel_dist_true", max_dist_true)
+        #tf.summary..scalar("Max_pixel_dist_fake", max_dist_fake)
+        #tf.summary..scalar("Max_pixel_dist_trans", max_dist_trans)
         return Lx, (Lx_true, Lx_fake), (Lx_dist_true, Lx_dist_fake, Lx_dist_trans), (max_dist_true, max_dist_fake, max_dist_trans)
 
 
@@ -267,8 +270,8 @@ class ATTAIN:
         max_dist_true = tf.reduce_max(tf.abs(x_adv-x_true))
         max_dist_fake = tf.reduce_max(tf.abs(x_adv-x_fake))
 
-        tf.summary.scalar("Max_dist_true", max_dist_true)
-        tf.summary.scalar("Max_dist_fake", max_dist_fake)
+        #tf.summary..scalar("Max_dist_true", max_dist_true)
+        #tf.summary..scalar("Max_dist_fake", max_dist_fake)
         return max_dist_true, max_dist_fake
 
 
@@ -289,8 +292,8 @@ class ATTAIN:
         norm_dist_adv_true = norm_dist(x_adv, x_true)
         norm_dist_adv_fake = norm_dist(x_adv, x_fake)
 
-        tf.summary.scalar("Norm_dist_adv_true", norm_dist_adv_true)
-        tf.summary.scalar("Norm_dist_adv_fake", norm_dist_adv_fake)
+        #tf.summary..scalar("Norm_dist_adv_true", norm_dist_adv_true)
+        #tf.summary..scalar("Norm_dist_adv_fake", norm_dist_adv_fake)
         return norm_dist_adv_true, norm_dist_adv_fake
     
 
@@ -484,15 +487,19 @@ class ATTAIN:
         Ly_clean, Ly_dist_clean = loss_y_from_clean()
         if FLAGS.IS_TARGETED_ATTACK == False and FLAGS.USE_IMITATION == False: # untargeted and no imitation
             Ly_fake = tf.constant(0.0)
+            Ly_trans = tf.constant(0.0)
+        if FLAGS.USE_IMITATION and FLAGS.ONLY_IMITATION:
+            Ly_trans = tf.constant(0.0)
             Ly_clean = tf.constant(0.0)
+        
         Ly = Ly_trans + Ly_fake + Ly_clean
 
-        tf.summary.scalar("Loss_y_trans", Ly_trans)
-        tf.summary.scalar("Dist_y_trans", Ly_dist_trans)
-        tf.summary.scalar("Loss_y_fake", Ly_fake)
-        tf.summary.scalar("Dist_y_fake", Ly_dist_fake)
-        tf.summary.scalar("Loss_y_clean", Ly_clean)
-        tf.summary.scalar("Dist_y_clean", Ly_dist_clean)
+        #tf.summary..scalar("Loss_y_trans", Ly_trans)
+        #tf.summary..scalar("Dist_y_trans", Ly_dist_trans)
+        #tf.summary..scalar("Loss_y_fake", Ly_fake)
+        #tf.summary..scalar("Dist_y_fake", Ly_dist_fake)
+        #tf.summary..scalar("Loss_y_clean", Ly_clean)
+        #tf.summary..scalar("Dist_y_clean", Ly_dist_clean)
         return Ly, (Ly_trans, Ly_fake, Ly_clean), (Ly_dist_trans, Ly_dist_fake, Ly_dist_clean)
 
     
@@ -569,12 +576,12 @@ class ATTAIN:
             #print tf.GraphKeys.TRAINABLE_VARIABLES
             reg_term = sum([regularize(param) for param in opt_vars])
             loss += reg_term
-            tf.summary.scalar("Regularization", reg_term)
-        tf.summary.scalar("Total_loss", loss)
-        tf.summary.scalar("Reconstruct_loss", recon_loss)
-        tf.summary.scalar("Label_loss", label_loss)
-        tf.summary.scalar("Sparse_loss", sparse_loss)
-        tf.summary.scalar("Variational_loss", variational_loss)
+            #tf.summary..scalar("Regularization", reg_term)
+        #tf.summary..scalar("Total_loss", loss)
+        #tf.summary..scalar("Reconstruct_loss", recon_loss)
+        #tf.summary..scalar("Label_loss", label_loss)
+        #tf.summary..scalar("Sparse_loss", sparse_loss)
+        #tf.summary..scalar("Variational_loss", variational_loss)
         return loss, recon_loss, label_loss, sparse_loss, variational_loss, reg_term
 
     @lazy_method_no_scope
@@ -650,8 +657,8 @@ class ATTAIN:
             for g, v in grads_and_vars:
                 # print v.name
                 name = v.name.replace(":", "_")
-                tf.summary.histogram(name+"_gradients", g)
-            tf.summary.scalar("Learning_rate", learning_rate)
+                #tf.summary..histogram(name+"_gradients", g)
+            #tf.summary..scalar("Learning_rate", learning_rate)
             return op, (zero_op, accum_op, avg_op)
         
 
@@ -725,8 +732,8 @@ class ATTAIN:
             for g, v in grads_and_vars:
                 # print v.name
                 name = v.name.replace(":", "_")
-                tf.summary.histogram(name+"_gradients", g)
-            tf.summary.scalar("Learning_rate", learning_rate)
+                #tf.summary..histogram(name+"_gradients", g)
+            #tf.summary..scalar("Learning_rate", learning_rate)
             return op, (zero_op, accum_op, avg_op), reset_decay_op, learning_rate
 
     @lazy_property

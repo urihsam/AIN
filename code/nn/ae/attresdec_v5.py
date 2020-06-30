@@ -319,15 +319,16 @@ class ATTRESDEC(ABCCNN):
                                         filters=curr_filter, biases=curr_bias,
                                         strides=self.decv_strides[layer_id], 
                                         padding=self.decv_padding[layer_id])
-                # batch normalization
-                if self.use_norm == "BATCH":
-                    net = ne.batch_norm(net, self.is_training)
-                elif self.use_norm == "LAYER":
-                    net = ne.layer_norm(net, self.is_training)
-                elif self.use_norm == "INSTA":
-                    net = ne.instance_norm(net, self.is_training)
+                
                 
                 if layer_id != end_layer-1:
+                    # batch normalization
+                    if self.use_norm == "BATCH":
+                        net = ne.batch_norm(net, self.is_training)
+                    elif self.use_norm == "LAYER":
+                        net = ne.layer_norm(net, self.is_training)
+                    elif self.use_norm == "INSTA":
+                        net = ne.instance_norm(net, self.is_training)
                     net = ne.leaky_relu(net, self.decv_leaky_ratio[layer_id])
                     net = ne.drop_out(net, self.decv_drop_rate[layer_id], self.is_training)
                 
@@ -364,12 +365,13 @@ class ATTRESDEC(ABCCNN):
 
     @lazy_method
     def evaluate(self, inputs, is_training, mask_states):
+        #import pdb; pdb.set_trace()
         self.is_training = is_training
         #assert inputs.get_shape().as_list()[1:] == self.res_in_shape
         if self.use_in_layer:
             inputs = self.in_layer(inputs)
         generated = self.decv_res_groups(inputs, mask_states)
-        generated = tf.math.tanh(generated)
+        generated = ne.layer_norm(tf.math.sinh(generated), self.is_training)
         generated = ne.brelu(generated, self.output_low_bound, self.output_up_bound) # clipping the final result 
 
         #

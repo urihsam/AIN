@@ -24,9 +24,9 @@ model_utils.set_flags()
 clean_train_saved = True
 clean_test_saved = True
 only_example_cases = True
-targeted_class_id = 8 # 0-9
 data = dataset(FLAGS.DATA_DIR, split_ratio=1.0, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
 os.environ["CUDA_VISIBLE_DEVICES"] = FLAGS.GPU_INDEX
+
 valid_frequency = 1
 stop_threshold = 0.8
 stop_count = 5
@@ -37,8 +37,7 @@ g = tf.get_default_graph()
 # attack_target = 8
 with g.as_default():
     images_holder = tf.placeholder(tf.float32, [None, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS])
-    clean_label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
-    targeted_label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
+    label_holder = tf.placeholder(tf.float32, [None, FLAGS.NUM_CLASSES])
     with tf.variable_scope('target') as scope:
         t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
                             conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
@@ -57,7 +56,7 @@ with g.as_default():
                             use_norm="NONE",
                             img_channel=1)
         _, clean_pred = t_model.prediction(images_holder)
-        clean_acc = t_model.accuracy(clean_pred, clean_label_holder)
+        clean_acc = t_model.accuracy(clean_pred, label_holder)
     with tf.variable_scope(scope, reuse=True):
         t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
                             conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
@@ -75,8 +74,8 @@ with g.as_default():
                             out_norm="NONE",
                             use_norm="NONE",
                             img_channel=1)
-        data_fake = fgm(t_model.prediction, images_holder, targeted_label_holder, 
-                        eps=FLAGS.EPSILON, iters=FLAGS.FGM_ITERS, clip_min=0., clip_max=1.)
+        data_fake = fgm(t_model.prediction, images_holder, label_holder, 
+                        eps=FLAGS.EPSILON, iters=FLAGS.FGM_ITERS, targeted=False, clip_min=0., clip_max=1.)
     with tf.variable_scope(scope, reuse=True):
         t_model = mnist_cnn.MNISTCNN(conv_filter_sizes=[[4,4], [3,3], [4,4], [3,3], [4,4]],
                             conv_strides = [[2,2], [1,1], [2,2], [1,1], [2,2]], 
@@ -95,7 +94,7 @@ with g.as_default():
                             use_norm="NONE",
                             img_channel=1)
         _, fake_pred = t_model.prediction(data_fake)
-        fake_acc = t_model.accuracy(fake_pred, targeted_label_holder)
+        fake_acc = t_model.accuracy(fake_pred, label_holder)
 
 
 config = tf.ConfigProto()
@@ -185,7 +184,7 @@ with tf.Session(config=config, graph=g) as sess:
             for class_id in range(FLAGS.NUM_CLASSES):
                 img_path = train_path + "/{}".format(class_id)
                 clean_path = img_path + "/images"
-                atk_path = clean_path + "/fgsm_t{}".format(targeted_class_id)
+                atk_path = clean_path + "/fgsm"
                 if not os.path.exists(atk_path):
                     os.mkdir(atk_path)
                 
@@ -204,13 +203,11 @@ with tf.Session(config=config, graph=g) as sess:
                         assert clean_img.shape == (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS)
                         clean_img = np.expand_dims(clean_img / 255.0, axis=0)
                         clean_label = np.expand_dims(model_utils._one_hot_encode(int(class_id), FLAGS.NUM_CLASSES), axis=0)
-                        targeted_label = np.expand_dims(model_utils._one_hot_encode(int(targeted_class_id), FLAGS.NUM_CLASSES), axis=0)
 
 
                         feed_dict = {
                             images_holder: clean_img, 
-                            clean_label_holder: clean_label,
-                            targeted_label_holder: targeted_label
+                            label_holder: clean_label
                         }                
                         #import pdb; pdb.set_trace()
                         start = time.time()
@@ -261,7 +258,7 @@ with tf.Session(config=config, graph=g) as sess:
             for class_id in range(FLAGS.NUM_CLASSES):
                 img_path = train_path + "/{}".format(class_id)
                 clean_path = img_path + "/images"
-                atk_path = clean_path + "/fgsm_t{}".format(targeted_class_id)
+                atk_path = clean_path + "/fgsm"
                 if not os.path.exists(atk_path):
                     os.mkdir(atk_path)
                 
@@ -279,14 +276,11 @@ with tf.Session(config=config, graph=g) as sess:
                         assert clean_img.shape == (FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS)
                         clean_img = np.expand_dims(clean_img / 255.0, axis=0)
                         clean_label = np.expand_dims(model_utils._one_hot_encode(int(class_id), FLAGS.NUM_CLASSES), axis=0)
-                        targeted_label = np.expand_dims(model_utils._one_hot_encode(int(targeted_class_id), FLAGS.NUM_CLASSES), axis=0)
-
 
                     
                         feed_dict = {
                             images_holder: clean_img, 
-                            clean_label_holder: clean_label,
-                            targeted_label_holder: targeted_label
+                            label_holder: clean_label
                         }                
                         #import pdb; pdb.set_trace()
                         start = time.time()
@@ -330,30 +324,23 @@ with tf.Session(config=config, graph=g) as sess:
 
             print("Train cost: {}s per example".format(train_cost))
             print("Test cost: {}s per example".format(test_cost))
-            if train_l_count != 0.0:
-                print("L inf distance of train adv example: {}".format(train_l_inf/train_l_count))
-                print("L 2 distance of train adv example: {}".format(train_l_2/train_l_count))
-            if test_l_count != 0.0:
-                print("L inf distance of test adv example: {}".format(test_l_inf/test_l_count))
-                print("L 2 distance of test adv example: {}".format(test_l_2/test_l_count))
+            print("L inf distance of train adv example: {}".format(train_l_inf/train_l_count))
+            print("L 2 distance of train adv example: {}".format(train_l_2/train_l_count))
+            print("L inf distance of test adv example: {}".format(test_l_inf/test_l_count))
+            print("L 2 distance of test adv example: {}".format(test_l_2/test_l_count))
             with open("fgsm_targeted_info.txt", "a+") as file: 
                 file.write("Train cost: {}s per example\n".format(train_cost))
                 file.write("Test cost: {}s per example\n".format(test_cost))
-                if train_l_count != 0.0:
-                    file.write("L inf distance of train adv example: {}\n".format(train_l_inf/train_l_count))
-                    file.write("L 2 distance of train adv example: {}\n".format(train_l_2/train_l_count))
-                if test_l_count != 0.0:
-                    file.write("L inf distance of test adv example: {}\n".format(test_l_inf/test_l_count))
-                    file.write("L 2 distance of test adv example: {}\n".format(test_l_2/test_l_count))
+                file.write("L inf distance of train adv example: {}\n".format(train_l_inf/train_l_count))
+                file.write("L 2 distance of train adv example: {}\n".format(train_l_2/train_l_count))
+                file.write("L inf distance of test adv example: {}\n".format(test_l_inf/test_l_count))
+                file.write("L 2 distance of test adv example: {}\n".format(test_l_2/test_l_count))
 
     size = 500
     batch_xs, batch_ys = data.next_test_batch(size)
-    targeted_label = np.asarray(model_utils._one_hot_encode(
-                        [int(FLAGS.TARGETED_LABEL)]*size, FLAGS.NUM_CLASSES))
     feed_dict = {
         images_holder: batch_xs, 
-        clean_label_holder: batch_ys,
-        targeted_label_holder: targeted_label
+        label_holder: batch_ys
     }
     # attack
     start = time.time()
@@ -374,19 +361,15 @@ with tf.Session(config=config, graph=g) as sess:
     print("L inf: {}".format(l_inf))
     print("L 2: {}".format(l_2))
     print("Time cost:", time_cost/500)
-
-
+    
     batch_xs = np.load("mnist_plot_examples.npy")/255.0
     batch_ys = np.load("mnist_plot_example_labels.npy")
 
-    targeted_label = np.asarray(model_utils._one_hot_encode(
-                        [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES))
 
     #import pdb; pdb.set_trace()
     feed_dict = {
         images_holder: batch_xs, 
-        clean_label_holder: batch_ys,
-        targeted_label_holder: targeted_label
+        label_holder: batch_ys
     }
     # c&w attack
     adv_images = sess.run(fetches=data_fake, feed_dict=feed_dict)
@@ -404,6 +387,6 @@ with tf.Session(config=config, graph=g) as sess:
         x_offset += im1.size[0]
 
     new_im.show()
-    new_im.save('iFGSM_MNIST_TGT_results.jpg')
+    new_im.save('iFGSM_MNIST_UNTGT_results.jpg')
 
 

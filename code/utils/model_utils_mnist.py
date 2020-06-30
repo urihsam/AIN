@@ -38,12 +38,15 @@ def set_flags():
     flags.DEFINE_integer("IMAGE_ROWS", 28, "Input row dimension")
     flags.DEFINE_integer("IMAGE_COLS", 28, "Input column dimension")
     flags.DEFINE_integer("NUM_CHANNELS", 1, "Input depth dimension")
+    # GPU params
+    flags.DEFINE_string("GPU_INDEX", "0", "GPU index number")
     # Training params
     flags.DEFINE_integer("NUM_EPOCHS", 1, "Number of epochs") # 200
     flags.DEFINE_integer("NUM_PRE_EPOCHS", 2, "Number of epochs") # 200
     flags.DEFINE_integer("NUM_ACCUM_ITERS", 2, "Number of accumulation") # 2
     flags.DEFINE_integer("BATCH_SIZE", 128, "Size of training batches")# 128
-    flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation") # 25
+    flags.DEFINE_integer("EVAL_FREQUENCY", 1, "Frequency for evaluation (iteration)") # 25
+    flags.DEFINE_integer("VALID_FREQUENCY", 1, "Frequency for evaluation (epoch)") # 25
     flags.DEFINE_integer("PRE_EVAL_FREQUENCY", 1, "Frequency for pre evaluation") # 25
     flags.DEFINE_bool("load_AE", False, "Load AE from the last training result or not")
     flags.DEFINE_string("AE_CKPT_RESTORE_NAME", "deep_cae.ckpt", "Name of ae ckpt")
@@ -60,6 +63,7 @@ def set_flags():
     flags.DEFINE_bool("USE_LABEL_MASK", False, "Whether use label mask or not")
     flags.DEFINE_bool("ADD_RANDOM", False, "Whether add random noise to central states or not")
     flags.DEFINE_bool("USE_IMITATION", True, "Wheteher use imitation or not")
+    flags.DEFINE_bool("ONLY_IMITATION", False, "Wheteher use imitation or not")
     # Loss params
     flags.DEFINE_string("LOSS_MODE_TRANS", "C_W2", "How to calculate loss from fake imgae") # ENTRO, C_W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C_W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C_W

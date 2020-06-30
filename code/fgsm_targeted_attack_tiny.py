@@ -22,15 +22,12 @@ model_utils.set_flags()
 
 # In[3]:
 data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED, split_ratio=1.0)
+os.environ["CUDA_VISIBLE_DEVICES"] = FLAGS.GPU_INDEX
 
-valid_frequency = 1
-stop_threshold = 0.8
-stop_count = 5
 targeted_class_id = FLAGS.TARGETED_LABEL
 ignore = True
 
 # In[5]:
-
 ## tf.reset_default_graph()
 g = tf.get_default_graph()
 # attack_target = 8
@@ -52,8 +49,10 @@ with g.as_default():
         fake_acc = t_model.accuracy(fake_pred, targeted_label_holder)
 
 
-
-with tf.Session(graph=g) as sess:
+#import pdb; pdb.set_trace()
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config, graph=g) as sess:
     sess.run(tf.global_variables_initializer())
     # Load target classifier
     t_model.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
@@ -218,7 +217,9 @@ with tf.Session(graph=g) as sess:
         targeted_label_holder: targeted_label
     }
     # attack
+    start = time.time()
     adv_images = sess.run(fetches=data_fake, feed_dict=feed_dict)
+    time_cost = (time.time() - start)
     l_inf = np.mean(
         np.amax(
             np.absolute(np.reshape(adv_images, (size, 64*64*3))-np.reshape(batch_xs, (size, 64*64*3))), 
@@ -233,10 +234,11 @@ with tf.Session(graph=g) as sess:
     
     print("L inf: {}".format(l_inf))
     print("L 2: {}".format(l_2))
+    print("Time cost:", time_cost/500)
     
     # plot figure
-    batch_xs = np.load("test_plot_clean_tiny_img.npy")
-    batch_ys = np.load("test_plot_clean_tiny_y.npy")
+    batch_xs = np.load("tiny_plot_examples.npy")/255.0
+    batch_ys = np.load("tiny_plot_example_labels.npy")
 
     targeted_label = np.asarray(model_utils._one_hot_encode(
                         [int(FLAGS.TARGETED_LABEL)]*10, FLAGS.NUM_CLASSES))
@@ -265,10 +267,3 @@ with tf.Session(graph=g) as sess:
 
     new_im.show()
     new_im.save('iFGSM_TINY_TGT_results.jpg')
-
-        
-            
-        
-        
-            
-        

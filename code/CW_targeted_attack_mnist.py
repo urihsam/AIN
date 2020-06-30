@@ -24,6 +24,7 @@ model_utils.set_flags()
 # In[3]:
 clean_saved = False
 data = dataset(FLAGS.DATA_DIR, split_ratio=1.0, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
+os.environ["CUDA_VISIBLE_DEVICES"] = FLAGS.GPU_INDEX
 
 valid_frequency = 1
 stop_threshold = 0.8
@@ -101,7 +102,9 @@ with g.as_default():
 
 
 
-with tf.Session(graph=g) as sess:
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config, graph=g) as sess:
     #import pdb; pdb.set_trace()
     sess.run(tf.global_variables_initializer())
 
@@ -144,8 +147,8 @@ with tf.Session(graph=g) as sess:
     
     
     size = 10
-    batch_xs = np.load("test_plot_clean_img.npy")
-    batch_ys = np.load("test_plot_clean_y.npy")
+    batch_xs = np.load("mnist_plot_examples.npy")/255.0
+    batch_ys = np.load("mnist_plot_example_labels.npy")
 
     tgt_ys = np.asarray(model_utils._one_hot_encode(
         [int(FLAGS.TARGETED_LABEL)]*size, FLAGS.NUM_CLASSES))

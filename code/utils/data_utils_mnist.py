@@ -154,6 +154,36 @@ class dataset(object):
     def test_shuffle(self): 
         random.shuffle(self._test_image_names_classes)
         self._test_batch_idx = 0
+
+    def _load_batch_adv_images_from_adv_path_prefixes(self, batch_size, clean_path_list, clean_labels, adv_path_prefixes):
+        batch_adv_images = []
+        batch_adv_labels = []
+        for prefix in adv_path_prefixes:
+            atk_images = np.ndarray([batch_size, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS], dtype='float32')
+            n_idx = 0
+            for clean_path in clean_path_list:
+                path_name = clean_path.split("/")
+                atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
+                
+                atk_res = self._load_image([atk_path, np.argmax(clean_labels[n_idx])], self.onehot, self.normalize, self.biased)
+                atk_images[n_idx, :, :, :] = atk_res[0]
+                n_idx += 1
+            
+            batch_adv_images.append(atk_images)
+            batch_adv_labels.append(clean_labels)
+        
+        batch_adv_images = np.concatenate(batch_adv_images, 0)
+        batch_adv_labels = np.concatenate(batch_adv_labels, 0)
+        return batch_adv_images, batch_adv_labels
+
+    def _shuffle_multi(self, list_): # every element in list_ share the same 0-th dimension
+        index = list(range(list_[0].shape[0]))
+        random.shuffle(index)
+        new_list_ = []
+        for ele in list_:
+            ele = ele[index]
+            new_list_.append(ele)
+        return new_list_
     
     def next_train_batch(self, batch_size, with_path=False):
         images = np.ndarray([batch_size, FLAGS.IMAGE_ROWS, FLAGS.IMAGE_COLS, FLAGS.NUM_CHANNELS], dtype='float32')

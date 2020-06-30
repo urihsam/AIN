@@ -1,11 +1,11 @@
 #!/bin/bash
-python ./code/run_attain_v6_tiny.py --train --NUM_EPOCHS 20000 --BATCH_SIZE 80 --EVAL_FREQUENCY 50\
+python ./code/run_attain_v6_tiny.py --NUM_EPOCHS 20000 --BATCH_SIZE 80 --EVAL_FREQUENCY 50\
     --GPU_INDEX 0\
     --IS_TARGETED_ATTACK=True --TARGETED_LABEL 8\
     --DATA_DIR ../tiny-imagenet-200 --ADV_PATH_PREFIX fgsm_t8\
     --AE_TYPE ATTAE --AE_PATH ./models/TINY/AE_TGT\
     --ATT_TYPE TRAD\
-    --load_AE=True --AE_CKPT_RESTORE_NAME deep_cae.Linf0.057142.Lx5.683643.acc0.850202.ckpt\
+    --load_AE=True --AE_CKPT_RESTORE_NAME deep_cae.Linf0.101441.Lx9.405862.acc0.977218.ckpt\
     --INIT_MAX_VALID_ACC 0.8\
     --train_label=False\
     --ADD_RANDOM=True \
@@ -26,7 +26,7 @@ python ./code/run_attain_v6_tiny.py --train --NUM_EPOCHS 20000 --BATCH_SIZE 80 -
     --BETA_Y_FAKE 20.0 --BETA_Y_FAKE_CHANGE_RATE 1.001\
     --BETA_Y_FAKE2 60.0 --BETA_Y_FAKE2_CHANGE_RATE 1.001\
     --BETA_Y_CLEAN 1.0 --BETA_Y_CLEAN_CHANGE_RATE 1.001\
-    --BOUND_CHANGE_TYPE EXP --PIXEL_BOUND 0.057 --BOUND_CHANGE_RATE -0.02 --BOUND_CHANGE_EPOCHS 4\
+    --BOUND_CHANGE_TYPE EXP --PIXEL_BOUND 0.101 --BOUND_CHANGE_RATE -0.02 --BOUND_CHANGE_EPOCHS 4\
     --MIN_BOUND 0.001 --MAX_BOUND 1.0\
     --ROLL_BACK_THRESHOLD 2\
     --ABS_DIFF_THRESHOLD 1e-4\
