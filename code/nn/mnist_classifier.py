@@ -154,8 +154,12 @@ class MNISTCNN(RESENC):
 
 
     @lazy_method
-    def optimization(self, learning_rate, loss):
-        optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss)
+    def optimization(self, learning_rate, loss, var_scope=None):
+        if var_scope == None:
+            var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "target")
+        else:
+            var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, var_scope)
+        optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss, var_list=var_list)
         return optimizer
 
     @lazy_method

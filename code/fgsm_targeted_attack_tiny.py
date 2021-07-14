@@ -25,7 +25,7 @@ data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED, s
 os.environ["CUDA_VISIBLE_DEVICES"] = FLAGS.GPU_INDEX
 
 targeted_class_id = FLAGS.TARGETED_LABEL
-ignore = True
+ignore = False
 
 # In[5]:
 ## tf.reset_default_graph()
@@ -55,7 +55,7 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config, graph=g) as sess:
     sess.run(tf.global_variables_initializer())
     # Load target classifier
-    t_model.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
+    t_model.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')#, global_vars=False)
     total_train_batch = int(data.train_size/FLAGS.BATCH_SIZE)
     total_valid_batch = int(data.valid_size/FLAGS.BATCH_SIZE)
     total_test_batch = int(data.test_size/FLAGS.BATCH_SIZE)
@@ -207,7 +207,7 @@ with tf.Session(config=config, graph=g) as sess:
                 file.write("Test cost: {}s per example".format(test_cost))
 
     # distance
-    size = 500
+    size = 50
     batch_xs, batch_ys, _ = data.next_valid_batch(size, with_path=True)
     targeted_label = np.asarray(model_utils._one_hot_encode(
                         [int(FLAGS.TARGETED_LABEL)]*size, FLAGS.NUM_CLASSES))

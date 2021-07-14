@@ -55,6 +55,7 @@ def set_flags():
     flags.DEFINE_integer("EARLY_STOPPING_THRESHOLD", 10, "Early stopping threshold")
     # AE type
     flags.DEFINE_string("AE_TYPE", "TRAD", "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
+    flags.DEFINE_bool("USE_ATT", True, "Use attention or not")
     flags.DEFINE_bool("SPARSE", False, "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
     flags.DEFINE_bool("VARI", False, "The type of Autoencoder") # SPARSE, VARI(ATIONAL), TRAD(ITIONAL), ATTEN(TIVE)
     # AE params
@@ -64,6 +65,10 @@ def set_flags():
     flags.DEFINE_bool("ADD_RANDOM", False, "Whether add random noise to central states or not")
     flags.DEFINE_bool("USE_IMITATION", True, "Wheteher use imitation or not")
     flags.DEFINE_bool("ONLY_IMITATION", False, "Wheteher use imitation or not")
+    flags.DEFINE_bool("USE_DISTANCE", True, "Wheteher use distance loss or not")
+    flags.DEFINE_bool("ONLY_DISTANCE", False, "Wheteher use distance loss or not")
+    flags.DEFINE_bool("USE_MISCLASSIFY", True, "Wheteher use misclassify loss or not")
+    flags.DEFINE_bool("ONLY_MISCLASSIFY", False, "Wheteher use misclassify loss or not")
     # Loss params
     flags.DEFINE_string("LOSS_MODE_TRANS", "C_W2", "How to calculate loss from fake imgae") # ENTRO, C_W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C_W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C_W
@@ -181,7 +186,7 @@ def set_flags():
     flags.DEFINE_bool("SAVE_DIFF", False, "save differences or not")
     flags.DEFINE_bool("IS_TARGETED_ATTACK", False, "targeted attack or not")
     flags.DEFINE_integer("TARGETED_LABEL", 8, "The label of targeted class")
-    flags.DEFINE_string("ADV_PATH_PREFIX", "fgsm", "The path prefix for adv examples")
+    flags.DEFINE_list("ADV_PATH_PREFIX", ["cw", "fgsm"], "The path prefix for adv examples")
     flags.DEFINE_float("EPSILON", 1, "Epsilon for fgm attack") # 128
     flags.DEFINE_float("EPSILON_CHANGE_RATE", 0.8, "Epsilon change rate") # 128
     flags.DEFINE_float("EPSILON_CHANGE_EPOCHS", 100, "Num of epochs for epsilon change") # 100

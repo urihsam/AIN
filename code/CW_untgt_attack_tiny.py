@@ -63,7 +63,7 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config, graph=g) as sess:
     #import pdb; pdb.set_trace()
     sess.run(tf.global_variables_initializer())
-
+    t_model.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
     '''
     ## distances
     size = 10 

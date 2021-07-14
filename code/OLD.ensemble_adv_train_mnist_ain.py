@@ -23,7 +23,7 @@ model_utils.set_flags()
 
 
 # In[3]:
-
+os.environ["CUDA_VISIBLE_DEVICES"] = FLAGS.GPU_INDEX
 
 data = dataset(FLAGS.DATA_DIR, normalize=FLAGS.NORMALIZE, biased=FLAGS.BIASED)
 
@@ -115,7 +115,7 @@ with tf.Session(config=config, graph=g) as sess:
                 valid_clean_loss = 0; valid_clean_acc = 0
                 for valid_idx in range(total_valid_batch):
                     batch_clean_xs, batch_clean_ys, clean_path = data.next_valid_batch(FLAGS.BATCH_SIZE, True)
-                    batch_adv_xs, batch_adv_ys =                     data._load_batch_adv_images_from_adv_path_prefixes(FLAGS.BATCH_SIZE, clean_path, batch_clean_ys, adv_path_prefixes)
+                    batch_adv_xs, batch_adv_ys = data._load_batch_adv_images_from_adv_path_prefixes(FLAGS.BATCH_SIZE, clean_path, batch_clean_ys, adv_path_prefixes)
                     batch_adv_xs, batch_adv_ys = data._shuffle_multi([batch_adv_xs, batch_adv_ys])
                     #
                     batch_xs = np.concatenate([batch_clean_xs, batch_adv_xs], 0)

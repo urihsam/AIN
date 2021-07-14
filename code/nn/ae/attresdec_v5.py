@@ -12,6 +12,7 @@ class ATTRESDEC(ABCCNN):
                  output_up_bound,
                  # attention layer
                  attention_type,
+                 use_att=True,
                  att_pos_idx=-2, # att will be applied after att_pos_idx of decv_res_block
                  att_f_filter_size=[1,1],
                  att_f_strides = [1,1],
@@ -60,6 +61,7 @@ class ATTRESDEC(ABCCNN):
         self.output_up_bound = output_up_bound
         # attention
         self.attention_type = attention_type
+        self.use_att = use_att
         self.att_pos_idx = len(decv_channel_sizes) + att_pos_idx if att_pos_idx < 0 else att_pos_idx
         self.att_f_filter_size = att_f_filter_size
         self.att_f_strides = att_f_strides
@@ -353,7 +355,8 @@ class ATTRESDEC(ABCCNN):
         net = inputs
         net = _form_groups(net, 0, self.att_pos_idx + 1)
         # attention
-        net = self.att_layer(net)
+        if self.use_att:
+            net = self.att_layer(net)
         
         net = _form_groups(net, self.att_pos_idx + 1, self.num_decv)
         

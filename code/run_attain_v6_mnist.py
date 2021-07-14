@@ -285,13 +285,26 @@ def test():
             total_test_batch = None
         if FLAGS.USE_IMITATION == False:
             postfix = "_no_imit"
-        else:
-            if FLAGS.ONLY_IMITATION:
-                postfix = "_only_imit"
-            else:
-                postfix = ""
+        elif FLAGS.ONLY_IMITATION:
+            postfix = "_only_imit"
+        elif FLAGS.USE_DISTANCE == False:
+            postfix = "_no_dist"
+        elif FLAGS.ONLY_DISTANCE:
+            postfix = "_only_dist"
+        elif FLAGS.USE_MISCLASSIFY == False:
+            postfix = "_no_misc"
+        elif FLAGS.ONLY_MISCLASSIFY:
+            postfix = "_only_misc"
+        elif FLAGS.USE_ATT == False:
+            postfix = "_no_att"
+        elif FLAGS.NUM_ENC_RES_BLOCK == 0 and FLAGS.ENC_RES_BLOCK_SIZE == 0:
+            postfix = "_no_res"
+        elif FLAGS.LABEL_CONDITIONING == False:
+            postfix = "_no_lc"
+        else: 
+            postfix = ""
         if FLAGS.IS_TARGETED_ATTACK:
-            log_file_name = "tgt_mnist_test_log{}.txt".format(postfix)
+            log_file_name = "tgt{}_mnist_test_log{}.txt".format(FLAGS.TARGETED_LABEL, postfix)
         else:
             log_file_name = "untgt_mnist_test_log{}.txt".format(postfix)
         test_info(sess, model, None, graph_dict, log_file_name, total_batch=total_test_batch)
@@ -360,13 +373,26 @@ def test():
         new_im.show()
         if FLAGS.USE_IMITATION == False:
             postfix = "_no_imit"
-        else:
-            if FLAGS.ONLY_IMITATION:
-                postfix = "_only_imit"
-            else:
-                postfix = ""
+        elif FLAGS.ONLY_IMITATION:
+            postfix = "_only_imit"
+        elif FLAGS.USE_DISTANCE == False:
+            postfix = "_no_dist"
+        elif FLAGS.ONLY_DISTANCE:
+            postfix = "_only_dist"
+        elif FLAGS.USE_MISCLASSIFY == False:
+            postfix = "_no_misc"
+        elif FLAGS.ONLY_MISCLASSIFY:
+            postfix = "_only_misc"
+        elif FLAGS.USE_ATT == False:
+            postfix = "_no_att"
+        elif FLAGS.NUM_ENC_RES_BLOCK == 0 and FLAGS.ENC_RES_BLOCK_SIZE == 0:
+            postfix = "_no_res"
+        elif FLAGS.LABEL_CONDITIONING == False:
+            postfix = "_no_lc"
+        else: 
+            postfix = ""
         if FLAGS.IS_TARGETED_ATTACK:
-            img_name = "AIN_MNIST_TGT{}.jpg".format(postfix)
+            img_name = "AIN_MNIST_TGT{}{}.jpg".format(FLAGS.TARGETED_LABEL, postfix)
         else:
             img_name = "AIN_MNIST_UNTGT{}.jpg".format(postfix)
         new_im.save(img_name)
@@ -418,11 +444,15 @@ def train():
         pre_op, _, _, _ = model.optimization(pre_label_loss, scope="PRE_OPT")
         # model training
         
+        
         model_loss_x, (model_lx_true, model_lx_fake), (model_lx_dist_true, model_lx_dist_fake, model_lx_dist_trans), \
             (model_max_dist_true, model_max_dist_fake, model_max_dist_trans) = model.loss_x(beta_x_t_holder, beta_x_f_holder)
         model_loss_y, (model_ly_trans, model_ly_fake, model_ly_clean), (model_ly_dist_trans, model_ly_dist_fake, model_ly_dist_clean) =\
             model.loss_y(beta_y_t_holder, beta_y_f_holder, beta_y_f2_holder, beta_y_c_holder
                         )
+        if FLAGS.ONLY_DISTANCE: model_loss_y = tf.constant(0.0)
+        if FLAGS.ONLY_MISCLASSIFY: model_loss_x = tf.constant(0.0)
+        
         model_loss, model_recon_loss, model_label_loss, model_sparse_loss, model_var_loss, model_reg = \
             model.loss(partial_loss_holder, model_loss_x, model_loss_y)
         model_op, (model_zero_op,  model_accum_op, model_avg_op), model_lr_reset_op, model_lr = model.optimization(model_loss, accum_iters=FLAGS.NUM_ACCUM_ITERS)
@@ -664,45 +694,58 @@ def train():
                 print("Validation")
                 if FLAGS.USE_IMITATION == False:
                     postfix = "_no_imit"
-                else:
-                    if FLAGS.ONLY_IMITATION:
-                        postfix = "_only_imit"
-                    else:
-                        postfix = ""
+                elif FLAGS.ONLY_IMITATION:
+                    postfix = "_only_imit"
+                elif FLAGS.USE_DISTANCE == False:
+                    postfix = "_no_dist"
+                elif FLAGS.ONLY_DISTANCE:
+                    postfix = "_only_dist"
+                elif FLAGS.USE_MISCLASSIFY == False:
+                    postfix = "_no_misc"
+                elif FLAGS.ONLY_MISCLASSIFY:
+                    postfix = "_only_misc"
+                elif FLAGS.USE_ATT == False:
+                    postfix = "_no_att"
+                elif FLAGS.NUM_ENC_RES_BLOCK == 0 and FLAGS.ENC_RES_BLOCK_SIZE == 0:
+                    postfix = "_no_res"
+                elif FLAGS.LABEL_CONDITIONING == False:
+                    postfix = "_no_lc"
+                else: 
+                    postfix = ""
                 if FLAGS.IS_TARGETED_ATTACK:
-                    valid_log_name = "tgt_mnist_valid_log{}.txt".format(postfix)
+                    valid_log_name = "tgt{}_mnist_valid_log{}.txt".format(FLAGS.TARGETED_LABEL, postfix)
                 else:
                     valid_log_name = "untgt_mnist_valid_log{}.txt".format(postfix)
                 valid_dict = test_info(sess, model, None, graph_dict, valid_log_name, total_batch=total_valid_batch, valid=True)
                 
 
                 #if valid_dict["adv_acc"] > valid_dict["fake_acc"] and valid_dict["adv_acc"] > 0.1: # stop
-                if valid_dict["max_dist_true"] <= valid_dict["max_dist_trans"]: # stop
-                    break
+                #if valid_dict["max_dist_true"] <= valid_dict["max_dist_trans"]: # stop
+                #break
+                #else:
+                ckpt_name='deep_cae.Linf{:.6f}.Lx{:.6f}.acc{:.6f}.ckpt'.format(
+                    valid_dict["max_dist_true"],
+                    valid_dict["Lx_dist_true"],
+                    valid_dict["adv_acc"]
+                    )
+                if FLAGS.IS_TARGETED_ATTACK:
+                    if valid_dict["adv_acc"] >= max_valid_acc:
+                        if valid_dict["Lx_dist_true"] <= min_lx_dist:
+                            print("Find model at bound step {} has larger valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
+                            model.tf_save(sess, name=ckpt_name) # extra store
+                            model.tf_save(sess)
+                            max_valid_acc = valid_dict["adv_acc"]
+                            min_lx_dist = valid_dict["Lx_dist_true"]
+                            print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
                 else:
-                    ckpt_name='deep_cae.Linf{:.6f}.Lx{:.6f}.acc{:.6f}.ckpt'.format(
-                        valid_dict["max_dist_true"],
-                        valid_dict["Lx_dist_true"],
-                        valid_dict["adv_acc"]
-                        )
-                    if FLAGS.IS_TARGETED_ATTACK:
-                        if valid_dict["adv_acc"] >= max_valid_acc:
-                            if valid_dict["Lx_dist_true"] <= min_lx_dist:
-                                print("Find model at bound step {} has larger valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
-                                model.tf_save(sess, name=ckpt_name) # extra store
-                                model.tf_save(sess)
-                                max_valid_acc = valid_dict["adv_acc"]
-                                min_lx_dist = valid_dict["Lx_dist_true"]
-                                print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
-                    else:
-                        if valid_dict["adv_acc"] <= min_valid_acc:
-                            if valid_dict["Lx_dist_true"] <= min_lx_dist:
-                                print("Find model at bound step {} has smaller valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
-                                model.tf_save(sess, name=ckpt_name) # extra store
-                                model.tf_save(sess)
-                                min_valid_acc = valid_dict["adv_acc"]
-                                min_lx_dist = valid_dict["Lx_dist_true"]
-                                print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
+                    if valid_dict["adv_acc"] <= min_valid_acc:
+                        if valid_dict["Lx_dist_true"] <= min_lx_dist:
+                            print("Find model at bound step {} has smaller valid acc: {}".format(FLAGS.PIXEL_BOUND, valid_dict["adv_acc"]))
+                            model.tf_save(sess, name=ckpt_name) # extra store
+                            model.tf_save(sess)
+                            min_valid_acc = valid_dict["adv_acc"]
+                            min_lx_dist = valid_dict["Lx_dist_true"]
+                            print("Trained params have been saved to '%s'" % FLAGS.AE_PATH)
                     
                 print("******************************************************************")
             print()
@@ -725,13 +768,26 @@ def train():
                 
                 if FLAGS.USE_IMITATION == False:
                     postfix = "_no_imit"
-                else:
-                    if FLAGS.ONLY_IMITATION:
-                        postfix = "_only_imit"
-                    else:
-                        postfix = ""
+                elif FLAGS.ONLY_IMITATION:
+                    postfix = "_only_imit"
+                elif FLAGS.USE_DISTANCE == False:
+                    postfix = "_no_dist"
+                elif FLAGS.ONLY_DISTANCE:
+                    postfix = "_only_dist"
+                elif FLAGS.USE_MISCLASSIFY == False:
+                    postfix = "_no_misc"
+                elif FLAGS.ONLY_MISCLASSIFY:
+                    postfix = "_only_misc"
+                elif FLAGS.USE_ATT == False:
+                    postfix = "_no_att"
+                elif FLAGS.NUM_ENC_RES_BLOCK == 0 and FLAGS.ENC_RES_BLOCK_SIZE == 0:
+                    postfix = "_no_res"
+                elif FLAGS.LABEL_CONDITIONING == False:
+                    postfix = "_no_lc"
+                else: 
+                    postfix = ""
                 if FLAGS.IS_TARGETED_ATTACK:
-                    valid_log_name = "tgt_mnist_valid_log{}.txt".format(postfix)
+                    valid_log_name = "tgt{}_mnist_valid_log{}.txt".format(FLAGS.TARGETED_LABEL, postfix)
                 else:
                     valid_log_name = "untgt_mnist_valid_log{}.txt".format(postfix)
                 valid_dict = test_info(sess, model, None, graph_dict, valid_log_name, total_batch=total_valid_batch, valid=True)

@@ -25,7 +25,7 @@ class resnet18:
             data_format=None)
 
     @lazy_method_no_scope
-    def prediction(self, inputs, use_summary=True):
+    def prediction(self, inputs, use_summary=True, is_training=False):
         self.inputs = inputs
         """
         The structure of the network.
@@ -38,7 +38,7 @@ class resnet18:
         _B_MEAN = 103.94
         _CHANNEL_MEANS = [_R_MEAN, _G_MEAN, _B_MEAN]
         features = inputs - tf.constant(_CHANNEL_MEANS)
-        logits = self.model(features, False)
+        logits = self.model(features, is_training)
         y_conv = tf.nn.softmax(logits)
 
         # self.saver = tf.train.Saver()
@@ -58,8 +58,12 @@ class resnet18:
 
 
     @lazy_method_no_scope
-    def optimization(self, cross_entropy):
-        optimizer = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    def optimization(self, learning_rate, loss, var_scope=None):
+        if var_scope == None:
+            var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "target")
+        else:
+            var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, var_scope)
+        optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss, var_list=var_list)
         return optimizer
 
     @lazy_method_no_scope
@@ -73,14 +77,18 @@ class resnet18:
         tf.summary.scalar("Accuracy", acc)
         return acc
 
-    def tf_load(self, sess, path, name):
+    def tf_load(self, sess, path, name, scope="target", global_vars=True):
         """
         Load trained model from .ckpt file.
         """
         file_name = path+'/'+name
         #saver = tf.train.Saver(ckpt_to_dict(file_name))
-        self.saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target'))
-        self.saver.restore(sess, file_name)
+        if global_vars: 
+            saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope))
+        else:
+            saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope))
+       
+        saver.restore(sess, file_name)
 
     def tf_load_meta(self, sess, path, name):
         """
@@ -92,10 +100,10 @@ class resnet18:
         saver.restore(sess, file_name)
 
 
-    '''def tf_save(self, sess, path, name):
+    def tf_save(self, sess, path, name, scope="target"):
         """
         Save trained model to .ckpt file.
         """
         file_name = path+'/'+name
-        saver = tf.train.Saver(ckpt_to_dict(file_name))
-        saver.save(sess, file_name)'''
+        saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope))
+        saver.save(sess, file_name)

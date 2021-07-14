@@ -145,6 +145,17 @@ class dataset(object):
         #print(label)
         return (image, label)
     
+
+    def _shuffle_multi(self, list_): # every element in list_ share the same 0-th dimension
+        index = list(range(list_[0].shape[0]))
+        random.shuffle(index)
+        new_list_ = []
+        for ele in list_:
+            ele = ele[index]
+            new_list_.append(ele)
+        return new_list_
+    
+
     @property
     def train_size(self): return len(self._train_image_names_classes)
     
@@ -193,7 +204,13 @@ class dataset(object):
                 if not with_path:
                     # atk
                     path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
+                    if isinstance(self.adv_path_prefix, list):
+                        for adv_path_prefix in self.adv_path_prefix:
+                            atk_path = "/".join(path_name[:-1] + [adv_path_prefix, path_name[-1]])
+                            if os.path.exists(atk_path):
+                                break
+                    else:
+                        atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
                     atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
                                                self.onehot, self.normalize, self.biased,
                                                is_np=True)
@@ -231,7 +248,13 @@ class dataset(object):
                 if not with_path:
                     # atk
                     path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
+                    if isinstance(self.adv_path_prefix, list):
+                        for adv_path_prefix in self.adv_path_prefix:
+                            atk_path = "/".join(path_name[:-1] + [adv_path_prefix, path_name[-1]])
+                            if os.path.exists(atk_path):
+                                break
+                    else:
+                        atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
                     atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
                                                self.onehot, self.normalize, self.biased,
                                                is_np=True)
@@ -268,7 +291,13 @@ class dataset(object):
                 if not with_path:
                     # atk
                     path_name = img_name_class[0].split("/")
-                    atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
+                    if isinstance(self.adv_path_prefix, list):
+                        for adv_path_prefix in self.adv_path_prefix:
+                            atk_path = "/".join(path_name[:-1] + [adv_path_prefix, path_name[-1]])
+                            if os.path.exists(atk_path):
+                                break
+                    else:
+                        atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
                     atk_res = self._load_image([atk_path+".npy", img_name_class[1]], 
                                                self.onehot, self.normalize, self.biased,
                                                is_np=True)

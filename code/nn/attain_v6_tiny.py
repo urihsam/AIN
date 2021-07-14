@@ -571,11 +571,13 @@ class ATTAIN:
             variational_loss = tf.constant(0)
 
         opt_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "autoencoder")
-        if FLAGS.REG_SCALE is not None:
+        if FLAGS.REG_SCALE != 0.0:
             regularize = tf.contrib.layers.l1_l2_regularizer(FLAGS.REG_SCALE, FLAGS.REG_SCALE)
             #print tf.GraphKeys.TRAINABLE_VARIABLES
             reg_term = sum([regularize(param) for param in opt_vars])
             loss += reg_term
+        else:
+            reg_term = tf.constant(0.0)
             #tf.summary..scalar("Regularization", reg_term)
         #tf.summary..scalar("Total_loss", loss)
         #tf.summary..scalar("Reconstruct_loss", recon_loss)

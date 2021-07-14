@@ -28,6 +28,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = FLAGS.GPU_INDEX
 valid_frequency = 1
 stop_threshold = 0.8
 stop_count = 5
+targeted_class_id = 8
 
 
 ## tf.reset_default_graph()
@@ -66,44 +67,44 @@ with tf.Session(config=config, graph=g) as sess:
     sess.run(tf.global_variables_initializer())
     # Load target classifier
     t_model.tf_load(sess, FLAGS.RESNET18_PATH, 'model.ckpt-5865')
-    '''
-    ## distances
-    size = 10 
-    batch_xs, batch_ys, _ = data.next_train_batch(size, with_path=True)
-
-    # attack
-    start = time.time()
-    adv_images = cw.attack(sess, batch_xs, batch_ys)
-    time_cost = time.time() - start
-
-    print("Time cost of generating per adv example: {}".format(time_cost/size))
-
-    l_inf = np.mean(
-        np.amax(
-            np.absolute(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
-            axis=-1)
-        )
     
-    l_2 = np.mean(
-        np.sqrt(np.sum(
-            np.square(np.reshape(adv_images, (size, 28*28))-np.reshape(batch_xs, (size, 28*28))), 
-            axis=-1)
-        ))
-    print("L inf: {}".format(l_inf))
-    print("L 2: {}".format(l_2))
+    train_l_inf = 0.0
+    train_l_2 = 0.0
+    train_l_count = 0
+    time_cost = 0
+    train_count = 0
+    train_path = FLAGS.DATA_DIR + "/train"
+    classes = os.listdir(train_path)
+    for class_ in classes:
+        clean_path = os.path.join(train_path, class_, "images")
+        atk_path =  os.path.join(clean_path , "cw_t{}".format(targeted_class_id))
+        if not os.path.exists(atk_path):
+            os.mkdir(atk_path)
+            clean_images_names = glob.glob(os.path.join(clean_path, '*.JPEG'))
+            np.random.shuffle(clean_images_names)
+            for clean_img_name in clean_images_names[:5]:
+                train_count += 1
+                path_name = clean_img_name.split("/")
+                atk_img_name = os.path.join(atk_path, path_name[-1])
+                if not os.path.exists(atk_img_name):
+                    im = Image.open(clean_img_name)
+                    image = np.asarray(im)
+                    if image.shape != (64, 64, 3):
+                        continue
+                    assert image.dtype == np.uint8
+                    image = image.astype(np.float32)
+                    assert image.shape == (64, 64, 3)
+                    image = np.expand_dims(image / 255.0 , axis=0)
 
-    ## acc
-    feed_dict = {
-        images_holder: batch_xs, 
-        label_holder: batch_ys,
-        fake_holder: adv_images
-    }
-    clean_accuracy, fake_accuracy = sess.run(fetches=[clean_acc, fake_acc], feed_dict=feed_dict)
-    print("Clean accuracy: {}".format(clean_accuracy))
-    print("Fake accuracy: {}".format(fake_accuracy))
-    '''
-    
-    
+                    targeted_label = np.expand_dims(model_utils._one_hot_encode(int(targeted_class_id), FLAGS.NUM_CLASSES), axis=0)
+
+                    atk_data = cw.attack(sess, image, targeted_label)
+                    np.save(atk_img_name, atk_data[0]*255.0)
+
+                if train_count % 100 == 0:
+                    print("{} adversarial examples have been generated".format(train_count))
+
+    print("Training dataset done!\n")
 
     batch_xs = np.load("tiny_plot_examples.npy")/255.0
     batch_ys = np.load("tiny_plot_example_labels.npy")

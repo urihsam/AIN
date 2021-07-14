@@ -10,6 +10,7 @@ class ATTRESENC(ABCCNN):
     def __init__(self,
                  # attention layer
                  attention_type,
+                 use_att=True,
                  att_pos_idx=1, # att will be applied before att_pos_idx of conv_res_block
                  att_f_filter_size = [1,1],
                  att_f_strides = [1,1],
@@ -63,6 +64,7 @@ class ATTRESENC(ABCCNN):
                 ):
         # attention
         self.attention_type = attention_type
+        self.use_att = use_att
         self.att_pos_idx = len(conv_filter_sizes) + att_pos_idx if att_pos_idx < 0 else att_pos_idx
         self.att_f_filter_size = att_f_filter_size
         self.att_f_strides = att_f_strides
@@ -244,7 +246,8 @@ class ATTRESENC(ABCCNN):
         net = inputs
         net = _form_groups(net, 0, self.att_pos_idx)
         # attention
-        net = self.att_layer(net)
+        if self.use_att:
+            net = self.att_layer(net)
         
         net = _form_groups(net, self.att_pos_idx, self.num_conv)
         net = tf.identity(net, name='conv_output')

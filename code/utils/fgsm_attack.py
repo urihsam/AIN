@@ -29,7 +29,7 @@ def fgm(model_prediction, x, y, eps=0.01, iters=1, sign=True, targeted=True, cli
     def _cond(xadv, i):
         return tf.less(i, iters)
 
-    def _body(xadv, i):
+    def _body(xadv, i): # l_inf
         logits, ybar = model_prediction(xadv, use_summary=False)
         loss = loss_fn(labels=y, logits=logits)
         dy_dx, = tf.gradients(loss, xadv) # gradient

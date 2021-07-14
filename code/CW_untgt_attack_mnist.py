@@ -106,7 +106,8 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config, graph=g) as sess:
     #import pdb; pdb.set_trace()
     sess.run(tf.global_variables_initializer())
-
+    # Load target classifier
+    t_model.tf_load(sess, FLAGS.MNISTCNN_PATH, "target", "mnist_cnn.ckpt")
     '''
     ## distances
     size = 10 

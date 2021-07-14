@@ -14,6 +14,7 @@ def set_flags():
     flags.DEFINE_integer("NUM_DEC_RES_BLOCK", 5, "The num of residual block")
     flags.DEFINE_integer("DEC_RES_BLOCK_SIZE", 3, "The num of layers in each block")
     flags.DEFINE_string("ATT_TYPE", "GOOGLE", "TRAD or GOOGLE")
+    flags.DEFINE_bool("USE_ATT", True, "Use attention or not")
     flags.DEFINE_integer("EMB_SIZE", 512, "The embedding size")
     flags.DEFINE_integer("G_EMB_SIZE", 512, "The embedding size")
     flags.DEFINE_integer("D_EMB_SIZE", 512, "The embedding size")
@@ -22,6 +23,7 @@ def set_flags():
     flags.DEFINE_string("EMB_TYPE", "MINIMUM", "SOFTMAX or MINIMUM")
     # Path
     flags.DEFINE_string("RESNET18_PATH", "./models/target_classifier/resnet18", "Path of Resnet18")
+    flags.DEFINE_string("ENS_RESNET18_PATH", "./models/ens_adv_train/resnet18", "Path of Resnet18")
     flags.DEFINE_string("AE_PATH", "./models/AE", "Path of AAN")
     flags.DEFINE_string("CNN_PATH", "./models/target_classifier/basic_CNN", "Path of CNN")
     flags.DEFINE_string("TRAIN_LOG_PATH", "./graphs/train", "Path of log for training")
@@ -64,6 +66,10 @@ def set_flags():
     flags.DEFINE_bool("ADD_RANDOM", False, "Whether add random noise to central states or not")
     flags.DEFINE_bool("USE_IMITATION", True, "Wheteher use imitation or not")
     flags.DEFINE_bool("ONLY_IMITATION", False, "Wheteher use imitation or not")
+    flags.DEFINE_bool("USE_DISTANCE", True, "Wheteher use distance loss or not")
+    flags.DEFINE_bool("ONLY_DISTANCE", False, "Wheteher use distance loss or not")
+    flags.DEFINE_bool("USE_MISCLASSIFY", True, "Wheteher use misclassify loss or not")
+    flags.DEFINE_bool("ONLY_MISCLASSIFY", False, "Wheteher use misclassify loss or not")
     # Loss params
     flags.DEFINE_string("LOSS_MODE_TRANS", "C_W2", "How to calculate loss from fake imgae") # ENTRO, C_W
     flags.DEFINE_string("LOSS_MODE_FAKE", "C_W", "How to calculate loss from fake imgae") # LOGITS, PREDS, ENTRO, C_W
@@ -181,7 +187,7 @@ def set_flags():
     flags.DEFINE_bool("SAVE_DIFF", False, "save differences or not")
     flags.DEFINE_bool("IS_TARGETED_ATTACK", False, "targeted attack or not")
     flags.DEFINE_integer("TARGETED_LABEL", 8, "The label of targeted class")
-    flags.DEFINE_string("ADV_PATH_PREFIX", "fgsm", "The path prefix for adv examples")
+    flags.DEFINE_list("ADV_PATH_PREFIX", ["cw","fgsm"], "The path prefix for adv examples")
     flags.DEFINE_float("EPSILON", 1, "Epsilon for fgm attack") # 128
     flags.DEFINE_float("EPSILON_CHANGE_RATE", 0.8, "Epsilon change rate") # 128
     flags.DEFINE_float("EPSILON_CHANGE_EPOCHS", 100, "Num of epochs for epsilon change") # 100

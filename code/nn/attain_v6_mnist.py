@@ -108,6 +108,7 @@ class ATTAIN:
                 with tf.variable_scope(FLAGS.ENC_NAME) as enc_scope:
                     self._encoder = attresenc.ATTRESENC(
                         attention_type=FLAGS.ATT_TYPE,
+                        use_att=FLAGS.USE_ATT,
                         att_pos_idx=1,
                         att_f_channel_size = 32,
                         att_g_channel_size = 32,
@@ -124,7 +125,7 @@ class ATTAIN:
                         res_drop_rate=0.4,
                         out_channel_size=self.central_channel_size,
                         # random noise
-                        add_random_noise=FLAGS.ADD_RANDOM, mean=0.0, stddev=0.01,
+                        add_random_noise=FLAGS.ADD_RANDOM, mean=0, stddev=0.1,
                         out_norm=FLAGS.ENC_OUT_NORM,
                         use_norm=FLAGS.ENC_NORM,
                         img_channel=FLAGS.NUM_CHANNELS)
@@ -136,6 +137,7 @@ class ATTAIN:
                     self._decoder_t = attresdec.ATTRESDEC(
                         self.output_low_bound, self.output_up_bound,
                         attention_type=FLAGS.ATT_TYPE,
+                        use_att=FLAGS.USE_ATT,
                         att_pos_idx=-2,
                         att_f_channel_size = 32,
                         att_g_channel_size = 32,
@@ -248,20 +250,24 @@ class ATTAIN:
             elif FLAGS.NORM_TYPE == "INF":
                 Lx_dist = tf.reduce_mean(tf.reduce_max(tf.abs(vec1-vec2), 1))
             return Lx_dist
-            
-        Lx_dist_true = _dist(x_adv, x_true)
-        Lx_true = beta_t * Lx_dist_true
+        
 
+        Lx_dist_true = _dist(x_adv, x_true)
+        if FLAGS.ONLY_IMITATION:
+            Lx_true = tf.constant(0.0)
+        elif FLAGS.USE_DISTANCE:
+            Lx_true = beta_t * Lx_dist_true
+        else:
+            Lx_true = tf.constant(0.0)
+        
         Lx_dist_fake = _dist(x_adv, x_fake)
-        if FLAGS.USE_IMITATION:
+        if FLAGS.ONLY_DISTANCE:
+            Lx_fake = tf.constant(0.0)
+        elif FLAGS.USE_IMITATION:
             Lx_fake = beta_f * Lx_dist_fake
-            if FLAGS.ONLY_IMITATION:
-                Lx_true = tf.constant(0.0)
         else:
             Lx_fake = tf.constant(0.0)
-        
-        
-        
+
 
         Lx = Lx_true + Lx_fake
 
@@ -372,6 +378,7 @@ class ATTAIN:
             mask2 = tf.one_hot(y_faked, FLAGS.NUM_CLASSES, on_value=float('inf'), off_value=0.0)
             adv_logits_at_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask1), axis=1)
             adv_logits_max_exclude_y_faked = tf.reduce_max(tf.subtract(self._target_adv_logits, mask2), axis=1)
+            '''
             if FLAGS.LOSS_MODE_FAKE == "C_W": # Maximize the logits at max prob position of faked data
                 Ly_dist = tf.reduce_mean(
                     tf.maximum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), FLAGS.LOSS_Y_LOW_BOUND_F)
@@ -389,47 +396,53 @@ class ATTAIN:
                     )
                 )
                 Ly_dist = loss_1 + loss_2
-            elif FLAGS.LOSS_MODE_FAKE == "MIX":
-                loss_1 = tf.reduce_mean(tf.maximum(
-                    tf.minimum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), 0.0),
-                    FLAGS.LOSS_Y_LOW_BOUND_T)
+            elif FLAGS.LOSS_MODE_FAKE == "MIX": 
+            '''
+            # Maximize the logits at max prob position of faked data
+            loss_1 = tf.reduce_mean(tf.maximum(
+                tf.minimum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), 0.0),
+                FLAGS.LOSS_Y_LOW_BOUND_T)
+            )
+            loss_2 = tf.reduce_mean(tf.minimum(FLAGS.LOSS_Y_UP_BOUND_T,
+                    np.exp(1.0) * (
+                        tf.exp(
+                            tf.maximum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), 0.0)
+                        ) - 1.0)
                 )
-                loss_2 = tf.reduce_mean(tf.minimum(FLAGS.LOSS_Y_UP_BOUND_T,
-                        np.exp(1.0) * (
-                            tf.exp(
-                                tf.maximum(tf.subtract(adv_logits_max_exclude_y_faked, adv_logits_at_y_faked), 0.0)
-                            ) - 1.0)
-                    )
-                )
-                Ly_dist = loss_1 + loss_2
+            )
+            Ly_dist = loss_1 + loss_2
 
-                
-                # no matter targeted or untargeted, we don't want predicted label to be equal to label
-                cond = tf.expand_dims(
-                    tf.cast(tf.not_equal(
-                        tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32),
-                        tf.argmax(self.label, axis=1, output_type=tf.int32)
-                    ), tf.float32),
-                    axis=1)
-                loss_logits = tf.reduce_mean(
-                    tf.multiply(cond, 
-                        tf.sqrt(
-                            tf.reduce_sum(tf.square(
-                                self._target_adv_logits-self._target_fake_logits
-                                ), 1)
-                        )
+            
+            # no matter targeted or untargeted, we don't want predicted label to be equal to label
+            cond = tf.expand_dims(
+                tf.cast(tf.not_equal(
+                    tf.argmax(self._target_fake_logits, axis=1, output_type=tf.int32),
+                    tf.argmax(self.label, axis=1, output_type=tf.int32)
+                ), tf.float32),
+                axis=1)
+            loss_logits = tf.reduce_mean(
+                tf.multiply(cond, 
+                    tf.sqrt(
+                        tf.reduce_sum(tf.square(
+                            self._target_adv_logits-self._target_fake_logits
+                            ), 1)
                     )
                 )
-                
-                
-            if FLAGS.USE_IMITATION:
-                if FLAGS.ONLY_IMITATION:
-                    return beta_f2 * loss_logits, Ly_dist
-                else:
-                    return beta_f * Ly_dist + beta_f2 * loss_logits, Ly_dist
-            else:
+            )
+            
+            if FLAGS.ONLY_MISCLASSIFY:
                 return beta_f * Ly_dist, Ly_dist
-        
+            if FLAGS.ONLY_IMITATION:
+                return beta_f2 * loss_logits, Ly_dist
+            
+            if FLAGS.USE_MISCLASSIFY and FLAGS.USE_IMITATION:
+                return beta_f * Ly_dist + beta_f2 * loss_logits, Ly_dist
+            elif FLAGS.USE_MISCLASSIFY: # USE_IMITATION == False
+                return  beta_f * Ly_dist, Ly_dist
+            elif FLAGS.USE_IMITATION: # USE_MISCLASSIFY == False
+                return beta_f2 * loss_logits, Ly_dist
+                
+
         def loss_y_from_clean(): 
             y_clean = tf.argmax(self.label, axis=1, output_type=tf.int32)
             mask1 = tf.one_hot(y_clean, FLAGS.NUM_CLASSES, on_value=0.0, off_value=float('inf'))
@@ -481,12 +494,16 @@ class ATTAIN:
         Ly_trans, Ly_dist_trans = loss_y_from_trans()
         Ly_fake, Ly_dist_fake = loss_y_from_fake()
         Ly_clean, Ly_dist_clean = loss_y_from_clean()
+        
         if FLAGS.IS_TARGETED_ATTACK == False and FLAGS.USE_IMITATION == False: # untargeted and no imitation
             Ly_fake = tf.constant(0.0)
             Ly_trans = tf.constant(0.0)
         if FLAGS.USE_IMITATION and FLAGS.ONLY_IMITATION:
             Ly_trans = tf.constant(0.0)
             Ly_clean = tf.constant(0.0)
+
+        if FLAGS.USE_MISCLASSIFY and FLAGS.ONLY_MISCLASSIFY:
+            Ly_fake = tf.constant(0.0)
             
         Ly = Ly_trans + Ly_fake + Ly_clean
 

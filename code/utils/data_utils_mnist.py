@@ -202,7 +202,13 @@ class dataset(object):
             res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
             #
             path_name = img_name_class[0].split("/")
-            atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
+            if isinstance(self.adv_path_prefix, list):
+                for adv_path_prefix in self.adv_path_prefix:
+                    atk_path = "/".join(path_name[:-1] + [adv_path_prefix, path_name[-1]])
+                    if os.path.exists(atk_path):
+                        break
+            else:
+                atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
             if res is not None:
                 if os.path.exists(atk_path):
                     images[idx, :, :, :] = res[0]
@@ -239,7 +245,13 @@ class dataset(object):
             res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
             #
             path_name = img_name_class[0].split("/")
-            atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
+            if isinstance(self.adv_path_prefix, list):
+                for adv_path_prefix in self.adv_path_prefix:
+                    atk_path = "/".join(path_name[:-1] + [adv_path_prefix, path_name[-1]])
+                    if os.path.exists(atk_path):
+                        break
+            else:
+                atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
             if res is not None:
                 if os.path.exists(atk_path):
                     images[idx, :, :, :] = res[0]
@@ -275,7 +287,13 @@ class dataset(object):
             res = self._load_image(img_name_class, self.onehot, self.normalize, self.biased)
             #
             path_name = img_name_class[0].split("/")
-            atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
+            if isinstance(self.adv_path_prefix, list):
+                for adv_path_prefix in self.adv_path_prefix:
+                    atk_path = "/".join(path_name[:-1] + [adv_path_prefix, path_name[-1]])
+                    if os.path.exists(atk_path):
+                        break
+            else:
+                atk_path = "/".join(path_name[:-1] + [self.adv_path_prefix, path_name[-1]])
             if res is not None:
                 if os.path.exists(atk_path):
                     images[idx, :, :, :] = res[0]
